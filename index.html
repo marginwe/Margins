@@ -126,6 +126,14 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .vr{width:1px;height:24px;background:var(--line);margin:0 4px;flex:none}
 .ctx{display:flex;align-items:center;gap:4px;padding:6px 8px;height:48px;overflow-x:auto;scrollbar-width:none;max-width:100%;animation:drop .22s var(--ease)}
 .ctx::-webkit-scrollbar{display:none}
+.tools .grip{width:22px;margin-right:2px;color:var(--mut);cursor:grab;touch-action:none;border-radius:9px}
+.tools .grip svg{width:14px;height:20px}
+.tools .grip:active{transform:none;background:var(--line)}
+.toolsWrap.dragging,.ai.dragging{transition:none!important;animation:none!important;opacity:.92}
+.ai header{touch-action:none;cursor:grab}
+.ai header .ib{touch-action:manipulation}
+.aiRs{position:absolute;right:0;bottom:0;width:28px;height:28px;touch-action:none;cursor:nwse-resize;z-index:2;display:grid;place-items:center;color:var(--mut)}
+.aiRs svg{width:14px;height:14px}
 @keyframes drop{from{opacity:0;transform:translateY(-6px) scale(.98)}}
 .sw{flex:none;width:30px;height:30px;border-radius:50%;border:0;padding:0;margin:0 2px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);transition:transform .15s var(--ease)}
 .sw[aria-pressed=true]{box-shadow:0 0 0 2px var(--glass),0 0 0 4px var(--ink);transform:scale(.86)}
@@ -454,6 +462,7 @@ svg.lasso{position:absolute;left:0;top:0;width:100%;height:100%;z-index:4;pointe
    <button class="ib" id="aiClose" aria-label="Close study buddy"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </header>
   <div id="aiBody"></div>
+  <div class="aiRs" id="aiRs" aria-label="Resize study buddy"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M13 5L5 13M13 9.5L9.5 13"/></svg></div>
  </div>
 </section>
 
@@ -502,17 +511,23 @@ const pick=(m,sel,attr,cb)=>{m.querySelectorAll(sel).forEach(b=>b.addEventListen
 const store=(()=>{
  let db=null;const mem={docs:new Map(),pdfs:new Map(),blobs:new Map()};
  const ready=new Promise(res=>{
-  try{const r=indexedDB.open('margins',2);
-   r.onupgradeneeded=()=>{const d=r.result;for(const n of['docs','pdfs','blobs'])if(!d.objectStoreNames.contains(n))d.createObjectStore(n,{keyPath:'id'})};
+  try{const r=indexedDB.open('margins',3);
+   r.onupgradeneeded=()=>{const d=r.result;for(const n of['docs','pdfs','blobs'])if(!d.objectStoreNames.contains(n))d.createObjectStore(n,{keyPath:'id'});
+    if(!d.objectStoreNames.contains('meta')){const ms=d.createObjectStore('meta',{keyPath:'id'});
+     // one-time: make a small summary of every note so the library opens fast
+     const c=r.transaction.objectStore('docs').openCursor();c.onsuccess=()=>{const cur=c.result;if(!cur)return;ms.put(metaOf(cur.value));cur.continue()}}};
    r.onsuccess=()=>{db=r.result;res(true)};r.onerror=()=>res(false);r.onblocked=()=>res(false);
   }catch(e){res(false)}
  });
+ function metaOf(d){const m={};for(const k in d)if(k!=='pages')m[k]=d[k];m.pages={length:(d.pages||[]).length};m.meta=1;return m}
  const tx=(s,mode,f)=>new Promise((res,rej)=>{const t=db.transaction(s,mode);const q=f(t.objectStore(s));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)});
  return{ready,get ok(){return !!db},
   all:()=>db?tx('docs','readonly',s=>s.getAll()):Promise.resolve([...mem.docs.values()]),
+  /* light list for the library: names, covers, folders, page counts. No ink. */
+  meta:()=>db?tx('meta','readonly',s=>s.getAll()):Promise.resolve([...mem.docs.values()].map(metaOf)),
   get:id=>db?tx('docs','readonly',s=>s.get(id)):Promise.resolve(mem.docs.get(id)),
-  put:d=>db?tx('docs','readwrite',s=>s.put(d)):(mem.docs.set(d.id,d),Promise.resolve()),
-  async del(id){if(!db){mem.docs.delete(id);mem.pdfs.delete(id);return}await tx('docs','readwrite',s=>s.delete(id));await tx('pdfs','readwrite',s=>s.delete(id))},
+  put:d=>(d&&d.meta)?Promise.reject(new Error('summary, not a note')):db?new Promise((res,rej)=>{const t=db.transaction(['docs','meta'],'readwrite');t.objectStore('docs').put(d);t.objectStore('meta').put(metaOf(d));t.oncomplete=()=>res();t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)}):(mem.docs.set(d.id,d),Promise.resolve()),
+  async del(id){if(!db){mem.docs.delete(id);mem.pdfs.delete(id);return}await new Promise((res,rej)=>{const t=db.transaction(['docs','meta','pdfs'],'readwrite');for(const n of['docs','meta','pdfs'])t.objectStore(n).delete(id);t.oncomplete=res;t.onerror=()=>rej(t.error)})},
   putPdf:(id,bytes)=>db?tx('pdfs','readwrite',s=>s.put({id,bytes})):(mem.pdfs.set(id,bytes),Promise.resolve()),
   async getPdf(id){if(!db)return mem.pdfs.get(id)||null;const r=await tx('pdfs','readonly',s=>s.get(id));return r?r.bytes:null},
   putBlob:(id,data)=>db?tx('blobs','readwrite',s=>s.put({id,data})):(mem.blobs.set(id,data),Promise.resolve()),
@@ -587,18 +602,18 @@ async function folderSheet(f){
   <label>Colour</label><div class="opts">${FCOL.map(c=>`<button type="button" class="opt" data-fc="${c}" aria-pressed="${c===color}" aria-label="Colour ${c}" style="width:44px;padding:0;display:grid;place-items:center"><span style="width:22px;height:22px;border-radius:7px;background:${c}"></span></button>`).join('')}</div>
   <div class="acts">${editing?'<button type="button" data-v="del" class="bad">Delete folder</button>':''}<button type="button" data-v="x">Cancel</button><button class="go">${editing?'Save':'Create'}</button></div></form>`,
   m=>{m.querySelector('#fn').addEventListener('input',e=>name=e.target.value);pick(m,'[data-fc]','data-fc',v=>color=v)});
- const all=await store.all();let st=allFolders(all);
+ const all=await store.meta();let st=allFolders(all);
  if(r==='del'){
   const n=all.filter(d=>d.folder===f.name);
   const ok=await sheet(`<h2>Delete "${esc(f.name)}"?</h2><p>${n.length?`Its ${n.length} ${n.length===1?'file goes':'files go'} back to the main library. Nothing is deleted.`:'It is empty.'}</p><div class="acts"><button data-v="x">Cancel</button><button data-v="yes" class="bad">Delete folder</button></div>`);
   if(ok!=='yes')return;
-  for(const d of n){delete d.folder;d.dirty=true;await store.put(d)}
+  for(const m of n){const d=await store.get(m.id);if(!d)continue;delete d.folder;d.dirty=true;await store.put(d)}
   saveFolders(st.filter(x=>x.name!==f.name));if(L.folder===f.name)L.folder='';ls.set('m.folder',L.folder);showLib();syncAll();toast('Folder deleted');return;
  }
  if(r!=='ok')return;name=name.trim();if(!name)return toast('Give the folder a name');
  if(st.some(x=>x.name.toLowerCase()===name.toLowerCase()&&(!f||x.name!==f.name)))return toast('A folder with that name already exists');
  if(editing){
-  for(const d of all.filter(d=>d.folder===f.name)){d.folder=name;d.dirty=true;await store.put(d)}
+  for(const m of all.filter(d=>d.folder===f.name)){const d=await store.get(m.id);if(!d)continue;d.folder=name;d.dirty=true;await store.put(d)}
   st=st.map(x=>x.name===f.name?{name,color}:x);if(L.folder===f.name){L.folder=name;ls.set('m.folder',name)}
  }else st.push({name,color});
  saveFolders(st);showLib();if(editing)syncAll();toast(editing?'Folder updated':'Folder created');
@@ -613,7 +628,7 @@ const starSvg='<svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1
 async function showLib(){
  $('#reader').classList.add('hidden');$('#lib').classList.remove('hidden');
  await store.ready;paintPill();
- const all=await store.all();
+ const all=await store.meta();
  const FL=allFolders(all);
  if(L.folder&&!FL.some(f=>f.name===L.folder))L.folder='';
  const inF=FL.find(f=>f.name===L.folder),h=new Date().getHours();
@@ -653,7 +668,7 @@ async function showLib(){
 $('#seg').addEventListener('click',e=>{const b=e.target.closest('[data-f]');if(!b)return;L.f=b.dataset.f;ls.set('m.filter',L.f);showLib()});
 $('#head').addEventListener('click',async e=>{
  if(e.target.closest('#crumb')){L.folder='';ls.set('m.folder','');showLib();return}
- if(e.target.closest('#fEdit')){const f=allFolders(await store.all()).find(x=>x.name===L.folder);if(f)folderSheet(f)}
+ if(e.target.closest('#fEdit')){const f=allFolders(await store.meta()).find(x=>x.name===L.folder);if(f)folderSheet(f)}
 });
 $('#sortB').onclick=()=>{L.sort=L.sort==='recent'?'name':'recent';ls.set('m.sort',L.sort);showLib()};
 let qT;$('#q').addEventListener('input',e=>{clearTimeout(qT);qT=setTimeout(()=>{L.q=e.target.value.trim().toLowerCase();showLib()},120)});
@@ -686,7 +701,7 @@ async function docMenu(id){
   if(r==='ok'){d.cover=c;await store.put(d);showLib()}}
  else if(v==='dup'){const n=JSON.parse(JSON.stringify(d));n.id=uid();n.name=d.name+' copy';n.created=n.updated=Date.now();n.star=false;delete n.filePath;n.dirty=true;if(d.hasPdf){const b=await store.getPdf(d.id);await store.putPdf(n.id,b)}await store.put(n);toast('Duplicated');showLib()}
  else if(v==='exp')exportPdf(d);
- else if(v==='fold'){const all=await store.all();const fs=allFolders(all).map(f=>f.name);let nf='';
+ else if(v==='fold'){const all=await store.meta();const fs=allFolders(all).map(f=>f.name);let nf='';
   const r=await sheet(`<h2>Move to folder</h2><div class="list">${['',...fs].map(f=>`<button data-v="f:${esc(f)}">${f?folderSvg+esc(f):'No folder'}${(d.folder||'')===f?'<small>current</small>':''}</button>`).join('')}</div>
    <form><label for="nf">Or make a new folder</label><input type="text" id="nf" placeholder="e.g. Biology" maxlength="40"><div class="acts"><button class="go">Create and move</button></div></form>`,m=>{m.querySelector('#nf').addEventListener('input',e=>nf=e.target.value)});
   if(r==='ok'&&nf.trim()){d.folder=nf.trim();const st=storedFolders();if(!st.some(x=>x.name===d.folder)){st.push({name:d.folder,color:FCOL[st.length%FCOL.length]});saveFolders(st)}}else if(r&&r.startsWith('f:'))d.folder=r.slice(2);else return;
@@ -821,7 +836,7 @@ const sizeOf=t=>clamp(+S.size[t]||RANGES[t][0],RANGES[t][0],RANGES[t][1]);
 async function openDoc(id){
  const doc=await store.get(id);if(!doc)return;
  if(S.reading)exitRead();S.doc=doc;S.pdf=null;S.hist=[];S.redo=[];S.zoom=1;S.txt={};sel=null;closeAI();
- $('#lib').classList.add('hidden');$('#reader').classList.remove('hidden');$('#panel').classList.add('hidden');
+ $('#lib').classList.add('hidden');$('#reader').classList.remove('hidden');$('#panel').classList.add('hidden');requestAnimationFrame(()=>{applyTb();applyAi()});
  $('#tTitle').textContent=doc.name;
  if(doc.hasPdf&&pdfjs){try{const b=await store.getPdf(id);S.pdf=await pdfjs.getDocument({data:new Uint8Array(b.slice(0))}).promise}catch(e){toast('Could not read the PDF')}}
  buildPages();scroller.scrollTop=0;scroller.scrollLeft=0;syncTb();
@@ -1959,6 +1974,52 @@ async function runScan(list){
 $('#scanStop').onclick=()=>{scanStop=true;LO.stop=true;$('#scanT').textContent='Stopping…'};
 $('#pSec').onclick=sectionSheet;
 
+/* ---------- move the toolbar and Study buddy anywhere ---------- */
+const jget=k=>{try{return JSON.parse(ls.get(k)||'null')}catch(e){return null}};
+const tw=$('.toolsWrap'),rdr=$('#reader'),aiEl=$('#ai');
+{const g=document.createElement('button');g.className='grip';g.id='tGrip';g.setAttribute('aria-label','Move toolbar. Double-tap to put it back.');
+ g.innerHTML='<svg viewBox="0 0 10 16" fill="currentColor"><circle cx="2.5" cy="3" r="1.4"/><circle cx="7.5" cy="3" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/><circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/></svg>';$('#tools').prepend(g)}
+function applyTb(){
+ const P=jget('m.tbPos');if(!P){['left','top','bottom','flexDirection'].forEach(k=>tw.style[k]='');return}
+ const W=rdr.clientWidth,H=rdr.clientHeight,w=tw.offsetWidth,th=$('#tools').offsetHeight||52;
+ tw.style.left=clamp(P.x*W,w/2+8,Math.max(w/2+8,W-w/2-8))+'px';
+ const cy=clamp(P.y*H,th/2+8,H-th/2-8);
+ if(P.y>.5){tw.style.top='auto';tw.style.bottom=(H-cy-th/2)+'px';tw.style.flexDirection='column-reverse'}
+ else{tw.style.bottom='auto';tw.style.top=(cy-th/2)+'px';tw.style.flexDirection='column'}
+}
+function applyAi(){
+ const P=jget('m.aiPos');if(!P){['left','top','right','bottom','width','height'].forEach(k=>aiEl.style[k]='');return}
+ const W=rdr.clientWidth,H=rdr.clientHeight,w=clamp(P.w*W,Math.min(280,W-16),W-16),h=clamp(P.h*H,Math.min(260,H-16),H-16);
+ Object.assign(aiEl.style,{width:w+'px',height:h+'px',left:clamp(P.x*W,8,W-w-8)+'px',top:clamp(P.y*H,8,H-h-8)+'px',right:'auto',bottom:'auto'});
+}
+function dragger(el,onStart,onMove,onEnd,onDouble){
+ let st=null,lastTap=0;
+ el.addEventListener('pointerdown',e=>{if(e.button>0)return;if(onStart(e)===false)return;e.preventDefault();e.stopPropagation();try{el.setPointerCapture(e.pointerId)}catch(_){}st={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false}});
+ el.addEventListener('pointermove',e=>{if(!st||e.pointerId!==st.id)return;const dx=e.clientX-st.x,dy=e.clientY-st.y;if(!st.moved&&Math.hypot(dx,dy)<5)return;st.moved=true;onMove(dx,dy)});
+ const end=e=>{if(!st||e.pointerId!==st.id)return;const m=st.moved;st=null;onEnd(m);
+  if(!m){const now=performance.now();if(now-lastTap<350){lastTap=0;onDouble()}else lastTap=now}};
+ el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);
+ el.addEventListener('click',e=>e.stopPropagation());
+}
+{let s0;
+ dragger($('#tGrip'),()=>{const r=$('#tools').getBoundingClientRect(),R=rdr.getBoundingClientRect();s0={cx:r.left+r.width/2-R.left,cy:r.top+r.height/2-R.top,W:R.width,H:R.height};tw.classList.add('dragging')},
+  (dx,dy)=>{let x=s0.cx+dx;if(Math.abs(x-s0.W/2)<24)x=s0.W/2;ls.set('m.tbPos',JSON.stringify({x:x/s0.W,y:(s0.cy+dy)/s0.H}));applyTb()},
+  m=>{tw.classList.remove('dragging');if(m){buzz();if(!ls.get('m.tbHint')){ls.set('m.tbHint','1');toast('Double-tap the dots to put the toolbar back',2400)}}},
+  ()=>{ls.set('m.tbPos','');applyTb();buzz();toast('Toolbar back in place',1500)});
+}
+{let s0;
+ dragger(aiEl.querySelector('header'),e=>{if(e.target.closest('button'))return false;const r=aiEl.getBoundingClientRect(),R=rdr.getBoundingClientRect();s0={x:r.left-R.left,y:r.top-R.top,w:r.width,h:r.height,W:R.width,H:R.height};aiEl.classList.add('dragging')},
+  (dx,dy)=>{ls.set('m.aiPos',JSON.stringify({x:(s0.x+dx)/s0.W,y:(s0.y+dy)/s0.H,w:s0.w/s0.W,h:s0.h/s0.H}));applyAi()},
+  m=>{aiEl.classList.remove('dragging');if(m&&!ls.get('m.aiHint')){ls.set('m.aiHint','1');toast('Drag the corner to resize. Double-tap the top bar to put it back.',3000)}},
+  ()=>{ls.set('m.aiPos','');applyAi();buzz()});
+ dragger($('#aiRs'),()=>{const r=aiEl.getBoundingClientRect(),R=rdr.getBoundingClientRect();s0={x:r.left-R.left,y:r.top-R.top,w:r.width,h:r.height,W:R.width,H:R.height};aiEl.classList.add('dragging')},
+  (dx,dy)=>{ls.set('m.aiPos',JSON.stringify({x:s0.x/s0.W,y:s0.y/s0.H,w:(s0.w+dx)/s0.W,h:(s0.h+dy)/s0.H}));applyAi()},
+  ()=>aiEl.classList.remove('dragging'),()=>{});
+}
+new ResizeObserver(()=>{if(ls.get('m.tbPos'))applyTb()}).observe(tw);
+addEventListener('resize',()=>{applyTb();applyAi()});
+setTimeout(()=>{applyTb();applyAi()},0);
+
 /* ---------- split view: a second file or page beside the one you write on ---------- */
 const RF={on:false,doc:null,pdf:null,zoom:1,els:[],W:400,vis:new Set(),chain:Promise.resolve(),ver:0};
 const refScroll=$('#refScroll'),refPages=$('#refPages');
@@ -1999,7 +2060,7 @@ async function openRef(id,page){
 }
 function closeRef(){if(!RF.on)return;RF.on=false;rio.disconnect();refPages.innerHTML='';RF.els=[];if(RF.pdf){try{RF.pdf.destroy()}catch(e){}}RF.pdf=null;RF.doc=null;$('#reader').classList.remove('split');$('#ref').classList.add('hidden')}
 async function refPicker(){
- const docs=(await store.all()).sort((a,b)=>b.updated-a.updated);
+ const docs=(await store.meta()).sort((a,b)=>b.updated-a.updated);
  const v=await sheet(`<h2>Split view</h2><p>Pick what to show beside your page. You keep writing on your page; the other side is for looking.</p><div class="list" style="max-height:52vh;overflow:auto">${docs.map(d=>`<button data-v="d:${d.id}">${d.hasPdf?ic('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>'):ic('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v18"/>')}${esc(d.name)}${S.doc&&d.id===S.doc.id?'<small>this file, other page</small>':d.folder?`<small>${esc(d.folder)}</small>`:''}</button>`).join('')}</div>`);
  if(v&&v.startsWith('d:')){const id=v.slice(2);await openRef(id,S.doc&&id===S.doc.id?Math.max(0,curIndex()-1):0);if(S.doc&&id===S.doc.id)toast('Showing this file again. Scroll it to any page.',2400)}
 }
@@ -2119,7 +2180,7 @@ function aiRules(){
 }
 function closeAI(){AI.open=false;if(AI.ctl)try{AI.ctl.abort()}catch(e){}$('#ai').classList.add('hidden')}
 async function openAI(fromSel){
- $('#panel').classList.add('hidden');$('#ai').classList.remove('hidden');AI.open=true;
+ $('#panel').classList.add('hidden');$('#ai').classList.remove('hidden');AI.open=true;applyAi();
  $('#aiBody').innerHTML='<div class="aisetup"><p>Looking at your page…</p></div>';
  try{await setAICtx(fromSel)}catch(e){}
  renderAI();
@@ -2358,10 +2419,10 @@ async function syncAll(force){
  syncing=true;SY.state='busy';paintSync();let fails=0;
  try{
   if(S.doc&&S.doc.dirty)await flush();
-  const docs=await store.all();
+  const docs=await store.meta();
   const taken=new Set(docs.filter(d=>d.filePath&&!(force||d.dirty)).map(d=>d.filePath.toLowerCase()));
-  for(const d of docs){if(!(force||d.dirty||!d.filePath))continue;
-   const live=S.doc&&S.doc.id===d.id?S.doc:d;try{await syncDoc(live,taken)}catch(e){fails++;console.warn('auto-save',d.name,e)}}
+  for(const m of docs){if(!(force||m.dirty||!m.filePath))continue;
+   try{const live=S.doc&&S.doc.id===m.id?S.doc:await store.get(m.id);if(live)await syncDoc(live,taken)}catch(e){fails++;console.warn('auto-save',m.name,e)}}
   if(force||Date.now()-(+ls.get('m.autoBk')||0)>10*60e3){
    try{await writeFile(SY.dir,'Margins backup.json',await backupBlob(await store.all()));ls.set('m.autoBk',Date.now());ls.set('m.lastBackup',Date.now())}catch(e){fails++}}
   SY.state=fails?'err':'ok';SY.last=Date.now();ls.set('m.syncLast',SY.last);
