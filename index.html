@@ -194,7 +194,40 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 .tools button.hasdot[aria-pressed=true]::after{box-shadow:0 0 0 1.5px #fff}
 #reader{background-image:radial-gradient(color-mix(in srgb,var(--ink) 8%,transparent) 1px,transparent 1.3px);background-size:22px 22px}
 #reader.reading{background-image:none}
-#reader.reading .hud,#reader.reading .toolsWrap,#reader.reading .panel,#reader.reading .ai{display:none!important}
+#reader.reading .hud,#reader.reading .toolsWrap,#reader.reading .panel,#reader.reading .ai,#reader.reading #ref{display:none!important}
+#reader.reading.split #scroller{left:0;top:0}
+/* split view */
+#ref{position:absolute;left:0;top:0;bottom:0;width:50%;z-index:1;border-right:1px solid var(--line);background:var(--desk)}
+#refScroll{position:absolute;inset:0;overflow:auto;touch-action:pan-x pan-y;overscroll-behavior:contain}
+#refPages{display:flex;flex-direction:column;align-items:center;gap:16px;padding:calc(80px + env(safe-area-inset-top)) 12px 96px;width:max-content;min-width:100%}
+.rpage{position:relative;background:#fff;border-radius:3px;box-shadow:0 1px 2px rgba(0,0,0,.1),0 12px 30px -20px rgba(0,0,0,.5);flex:none}
+.rpage canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:3px}
+.refbar{position:absolute;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:2px;padding:4px;z-index:3;max-width:calc(100% - 24px);overflow-x:auto;scrollbar-width:none}
+.refbar::-webkit-scrollbar{display:none}
+.refbar .rb{flex:none;height:40px;border:0;background:none;padding:0 10px;font-weight:600;font-size:14px;border-radius:10px;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;color:var(--ink)}
+.refbar .rb:active{background:var(--surface2)}
+#refName{max-width:14ch;overflow:hidden;text-overflow:ellipsis}
+.refbar .ib{width:40px;height:40px;flex:none}
+.refbar .tag{flex:none;font-size:11px;font-weight:700;color:var(--mute);padding:0 6px;text-transform:none}
+#reader.split #scroller{left:50%}
+@media (orientation:portrait){
+ #ref{width:auto;right:0;bottom:auto;height:44%;border-right:0;border-bottom:1px solid var(--line)}
+ #reader.split #scroller{left:0;top:44%}
+ #reader.split #pages{padding-top:20px}
+ #reader.split .toolsWrap{top:auto;bottom:calc(12px + env(safe-area-inset-bottom));flex-direction:column-reverse}
+ .refbar{bottom:10px}
+}
+/* sections in the pages panel */
+.sech{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:10px 0 0;padding:8px 4px 8px 10px;border-radius:12px;background:var(--surface2);cursor:pointer}
+.sech:first-child{margin-top:0}
+.sech .sn{flex:none;font-weight:800;font-size:13px;color:var(--acc);font-variant-numeric:tabular-nums}
+.sech .st{flex:1;font-weight:600;font-size:13px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.sech small{flex:none;font-size:11px;color:var(--mute)}
+.sech .secm{flex:none;width:32px;height:32px;border:0;background:none;border-radius:8px;color:var(--mute);display:grid;place-items:center}
+.sech.lv1{margin-left:10px}.sech.lv2{margin-left:20px}.sech.lv3{margin-left:30px}
+.scanbar{display:flex;align-items:center;gap:8px;margin:0 14px 8px;padding:8px 8px 8px 12px;border-radius:12px;background:var(--accSoft);color:var(--acc);font-size:13px;font-weight:600}
+.scanbar span{flex:1}
+.scanbar button{height:32px;padding:0 12px;border-radius:9px;border:0;background:var(--acc);color:#fff;font-weight:600;font-size:12px}
 #reader.reading #pages{padding-top:calc(20px + env(safe-area-inset-top));padding-bottom:120px}
 #reader.reading[data-rt=sepia]{--desk:#e7dcc3}
 #reader.reading[data-rt=sepia] .page{filter:sepia(.42) saturate(1.15) brightness(.97)}
@@ -214,6 +247,11 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stro
 @media(max-width:600px){.pill{padding:0 10px;font-size:12px}.mark span{display:none}.pill.ok#stPill{display:none}.top{gap:6px}}
 /* selection, lasso, laser, recorder */
 .sel{position:absolute;z-index:4;border:1.5px dashed var(--acc);border-radius:4px;background:rgba(59,91,253,.05);cursor:move;touch-action:none}
+.shh{position:absolute;z-index:6;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;background:#fff;border:3px solid var(--acc);box-shadow:0 2px 8px rgba(0,0,0,.3);touch-action:none;cursor:grab}
+.shh::before{content:"";position:absolute;inset:-12px;border-radius:50%}
+.shh.cn{background:var(--acc);border-color:#fff}
+.sel.shape .h{display:none}
+.sel.shape{border-style:dotted;border-color:color-mix(in srgb,var(--acc) 55%,transparent);background:none}
 .sel .h{position:absolute;right:-14px;bottom:-14px;width:28px;height:28px;border-radius:50%;background:var(--acc);border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);cursor:nwse-resize}
 .selbar{position:absolute;z-index:5;display:flex;align-items:center;gap:2px;padding:4px;height:50px;transform:translateX(-50%);white-space:nowrap;max-width:min(600px,calc(100vw - 24px));overflow-x:auto;scrollbar-width:none;animation:drop .2s var(--ease)}
 .selbar::-webkit-scrollbar{display:none}
@@ -350,6 +388,14 @@ svg.lasso{position:absolute;left:0;top:0;width:100%;height:100%;z-index:4;pointe
 </section>
 
 <section id="reader" class="hidden">
+ <div id="ref" class="hidden"><div id="refScroll"><div id="refPages"></div></div>
+  <div class="refbar glass"><button class="rb" id="refPick"><span id="refName"></span><svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M6 9l6 6 6-6"/></svg></button>
+   <button class="rb" id="refPg"></button><span class="tag">view only</span>
+   <button class="ib" id="refZo" aria-label="Zoom out"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M21 21l-5-5"/></svg></button>
+   <button class="ib" id="refZi" aria-label="Zoom in"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M11 8v6M21 21l-5-5"/></svg></button>
+   <button class="ib" id="refSwap" aria-label="Swap sides"><svg class="i" viewBox="0 0 24 24"><path d="M7 7h13m0 0-4-4m4 4-4 4M17 17H4m0 0 4-4m-4 4 4 4"/></svg></button>
+   <button class="ib" id="refClose" aria-label="Close split view"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+ </div>
  <div id="scroller"><div id="pages"></div></div>
  <canvas id="laser"></canvas>
  <div class="readbar glass off" id="readbar">
@@ -365,6 +411,7 @@ svg.lasso{position:absolute;left:0;top:0;width:100%;height:100%;z-index:4;pointe
   <div class="rec glass hidden" id="rec"><span class="dot"></span><span id="recT">0:00</span><button id="recStop">Stop</button></div>
   <span class="sp"></span>
   <div class="pl glass">
+   <button class="ib" id="tSplit" aria-label="Split view"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M12 4v16"/></svg></button>
    <button class="ib" id="tRead" aria-label="Reading mode"><svg class="i" viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 3 5v13c4-.5 7 0 9 1.5 2-1.5 5-2 9-1.5V5c-4-.5-7 0-9 1.5z"/><path d="M12 6.5v13"/></svg></button>
    <button class="ib" id="tAI" aria-label="AI study buddy" style="color:#6d5cf6"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></button>
    <button class="ib" id="tPanel" aria-label="Pages"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="3" width="7" height="8" rx="1.5"/><rect x="13" y="3" width="7" height="8" rx="1.5"/><rect x="4" y="13" width="7" height="8" rx="1.5"/><rect x="13" y="13" width="7" height="8" rx="1.5"/></svg></button>
@@ -390,12 +437,14 @@ svg.lasso{position:absolute;left:0;top:0;width:100%;height:100%;z-index:4;pointe
  <div class="zoomBadge glass" id="zoomBadge" style="opacity:0"></div>
  <div class="panel glass hidden" id="panel">
   <header><b>Pages</b>
+   <button class="ib" id="pSec" aria-label="Sections"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h3M4 12h3M4 18h3M10 6h10M12 12h8M12 18h8"/></svg></button>
    <button class="ib" id="pAdd" aria-label="Add blank page after current"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
    <button class="ib" id="pClose" aria-label="Close pages"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </header>
   <div class="ptabs" id="ptabs"><button data-pt="all" aria-pressed="true">All pages</button><button data-pt="bm" aria-pressed="false">Bookmarks</button></div>
+  <div class="scanbar hidden" id="scanBar"><span id="scanT"></span><button id="scanStop">Stop</button></div>
   <div class="thumbs" id="thumbs"></div>
-  <p class="phint">Long-press a page for options</p>
+  <p class="phint">Long-press a page for options. The list button finds sections.</p>
  </div>
  <div class="ai glass hidden" id="ai">
   <header><b><span class="spark"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></span>Study buddy</b>
@@ -776,6 +825,7 @@ async function openDoc(id){
  if(doc.hasPdf&&pdfjs){try{const b=await store.getPdf(id);S.pdf=await pdfjs.getDocument({data:new Uint8Array(b.slice(0))}).promise}catch(e){toast('Could not read the PDF')}}
  buildPages();scroller.scrollTop=0;scroller.scrollLeft=0;syncTb();
  const lp=doc.lp||0;if(lp&&els[lp])requestAnimationFrame(()=>{scroller.scrollTop=els[lp].offsetTop-80;curPage()});
+ if(doc.hasPdf&&S.pdf&&!doc.secScan){const id=doc.id;detectSections().then(n=>{if(!S.doc||S.doc.id!==id)return;doc.secScan=1;save();if(n){buildThumbs();toast(`Found ${n} section${n>1?'s':''}. Open Pages to jump between them.`,3000)}}).catch(()=>{})}
 }
 function buildPages(){
  io.disconnect();vis.clear();sel=null;
@@ -888,7 +938,8 @@ function redraw(i){rafSet.add(i);if(!raf)raf=requestAnimationFrame(()=>{raf=0;ra
 
 let saveT;
 function save(){if(S.doc)S.doc.dirty=true;clearTimeout(saveT);saveT=setTimeout(flush,400)}
-async function flush(){clearTimeout(saveT);if(!S.doc)return;S.doc.updated=Date.now();if(els.length)S.doc.lp=curIndex();try{await store.put(S.doc)}catch(e){toast('Could not save. Storage may be full.',4000)}}
+async function flush(){clearTimeout(saveT);if(!S.doc)return;S.doc.updated=Date.now();if(els.length)S.doc.lp=curIndex();
+ if(RF.on&&RF.doc&&RF.doc.id===S.doc.id){RF.doc=S.doc;clearTimeout(RF.t);RF.t=setTimeout(()=>{RF.ver=(RF.ver||0)+1;RF.vis.forEach(rqueue)},600)}try{await store.put(S.doc)}catch(e){toast('Could not save. Storage may be full.',4000)}}
 function snap(i){S.hist.push({i,a:JSON.parse(JSON.stringify(S.doc.pages[i].a))});if(S.hist.length>300)S.hist.shift();S.redo=[];syncUndo()}
 function undo(from,to){clearSel();const h=from.pop();if(!h)return;const pg=S.doc.pages[h.i];if(!pg)return syncUndo();to.push({i:h.i,a:pg.a});pg.a=h.a;redraw(h.i);save();syncUndo();buzz()}
 function syncUndo(){$('#tUndo').disabled=!S.hist.length;$('#tRedo').disabled=!S.redo.length}
@@ -947,6 +998,14 @@ pagesEl.addEventListener('pointerdown',e=>{
   if(touches.size===2){abortTouchStroke();pan=null;startPinch();return}
   if(touches.size>2)return;
  }
+ if(sel&&!cur&&S.tool!=='hand'){
+  const hv=e.target.closest('.shh'),hs=e.target.closest('.sel .h');
+  if(hv||hs){e.preventDefault();try{pagesEl.setPointerCapture(e.pointerId)}catch(_){}const sEl=els[sel.i];snap(sel.i);
+   if(hv){const it=sel.items[0];cur={id:e.pointerId,type:e.pointerType,mode:'vtx',i:sel.i,el:sEl,it,k:+hv.dataset.k,orig:JSON.parse(JSON.stringify(it.shape)),moved:false}}
+   else cur={id:e.pointerId,type:e.pointerType,mode:'scale',i:sel.i,el:sEl,start:pos(e,sEl),orig:JSON.parse(JSON.stringify(sel.items)),b:selBounds(),moved:false};
+   $$('.selbar').forEach(x=>x.remove());return}
+  if(S.tool!=='lasso'&&!(e.pointerType==='touch'&&S.penOnly))clearSel();
+ }
  if(e.pointerType==='pen'&&!S.penOnly){S.penOnly=true;ls.set('m.penOnly','1');toast('Stylus detected. Fingers scroll and zoom, the pen writes.',3200)}
  const panMode=S.tool==='hand'||(e.pointerType==='touch'&&S.penOnly);
  try{pagesEl.setPointerCapture(e.pointerId)}catch(_){}
@@ -980,6 +1039,7 @@ pagesEl.addEventListener('pointermove',e=>{
  if(cur.mode==='laser'){laserAdd(e);return}
  if(cur.mode==='lasso'){const pt=pos(e,cur.el);const p=cur.pts;if(Math.hypot(pt.x-p[p.length-2],pt.y-p[p.length-1])>.003){p.push(r4(pt.x),r4(pt.y));lassoDraw()}return}
  if(cur.mode==='move'||cur.mode==='scale'){transformSel(pos(e,cur.el));return}
+ if(cur.mode==='vtx'){dragVertex(pos(e,cur.el));return}
  const evs=e.getCoalescedEvents?e.getCoalescedEvents():[];
  for(const ev of (evs.length?evs:[e])){
   const pt=pos(ev,cur.el);
@@ -1003,9 +1063,12 @@ function endPtr(e){
  if(!cur||e.pointerId!==cur.id)return;
  if(cur.mode==='laser'){cur=null;return}
  if(cur.mode==='lasso'){const c=cur;cur=null;finishLasso(c);return}
- if(cur.mode==='move'||cur.mode==='scale'){if(!cur.moved){S.hist.pop();syncUndo()}cur=null;save();paintSel();return}
+ if(cur.mode==='move'||cur.mode==='scale'||cur.mode==='vtx'){if(!cur.moved){S.hist.pop();syncUndo()}cur=null;save();paintSel();return}
  if(cur.erase){$('#ring').style.display='none';if(!cur.changed){S.hist.pop();syncUndo()}cur=null;save();return}
- clearTimeout(cur.holdT);const i=cur.i;cur=null;redraw(i);save();
+ clearTimeout(cur.holdT);const i=cur.i,c=cur;cur=null;
+ if(c.straight&&c.item.p.length===4){c.item.shape={type:'poly',kind:'line',closed:false,pts:c.item.p.slice()}}
+ if(c.item&&c.item.shape){sel={i,items:[c.item]};c.base=null;drawInk(i);paintSel()}else redraw(i);
+ save();
 }
 function pressureOf(ev){
  const L=cur.last;let q;
@@ -1019,8 +1082,8 @@ function onHold(c){
  if(cur!==c||c.erase||c.straight||c.shape)return;
  const it=c.item,p=it.p;if(p.length<8)return;
  const qa=r2(it.q.reduce((a,b)=>a+b,0)/it.q.length);
- const sh=it.t!=='hl'&&detectShape(p);
- if(sh){it.p=sh;it.q=new Array(sh.length/2).fill(qa);it.s=1;c.shape=true;toast(sh.length>12?'Snapped to an ellipse':'Snapped to a rectangle',1200)}
+ const sh=it.t!=='hl'&&detectShape2(p);
+ if(sh){it.shape=sh;it.p=shapePoints(sh);it.q=new Array(it.p.length/2).fill(qa);it.s=1;c.shape=true;toast(shapeName(sh)+'. Drag the dots to adjust.',1600)}
  else{c.straight={x:p[0],y:p[1],q:qa};it.s=1;setStraightEnd({x:p[p.length-2],y:p[p.length-1]})}
  buzz();redraw(c.i);
 }
@@ -1029,6 +1092,75 @@ function setStraightEnd(pt){
  const hl=it.t==='hl',step=Math.PI/(hl?2:4),sn=Math.round(ang/step)*step;
  if(Math.abs(ang-sn)<(hl?.14:.07)){dx=Math.cos(sn)*L;dy=Math.sin(sn)*L}
  it.p=[a.x,a.y,r4(a.x+dx),r4(a.y+dy)];it.q=[a.q,a.q];
+}
+/* shapes: snap to clean geometry, then edit with handles */
+function rdp(P,eps){
+ if(P.length<3)return P.slice();let dm=0,ix=0;const A=P[0],B=P[P.length-1];
+ for(let i=1;i<P.length-1;i++){const d=segDist({x:P[i][0],y:P[i][1]},A[0],A[1],B[0],B[1]);if(d>dm){dm=d;ix=i}}
+ if(dm>eps){const l=rdp(P.slice(0,ix+1),eps),r=rdp(P.slice(ix),eps);return l.slice(0,-1).concat(r)}return[A,B];
+}
+function cleanPoly(V,closed,size){
+ let out=V.slice(),ch=true;
+ while(ch&&out.length>2){ch=false;const n=out.length;
+  for(let i=0;i<n;i++){if(!closed&&(i===0||i===n-1))continue;const A=out[(i-1+n)%n],B=out[i],C=out[(i+1)%n];
+   const d1=Math.hypot(B[0]-A[0],B[1]-A[1]);const ux=B[0]-A[0],uy=B[1]-A[1],vx=C[0]-B[0],vy=C[1]-B[1];
+   const turn=Math.abs(Math.atan2(ux*vy-uy*vx,ux*vx+uy*vy));
+   if(d1<size*.07||turn<.38){out.splice(i,1);ch=true;break}}}
+ return out;
+}
+function polyErr(P,V,closed){let e=0;const n=V.length;for(const q of P){let m=1e9;for(let i=0;i<(closed?n:n-1);i++){const A=V[i],B=V[(i+1)%n];m=Math.min(m,segDist({x:q[0],y:q[1]},A[0],A[1],B[0],B[1]))}e+=m}return e/P.length}
+function rectish(V){for(let i=0;i<4;i++){const A=V[i],B=V[(i+1)%4];const a=Math.abs(Math.atan2(B[1]-A[1],B[0]-A[0]))%(Math.PI/2);if(Math.min(a,Math.PI/2-a)>.28)return false}return true}
+function detectShape2(p){
+ const P=[];for(let k=0;k<p.length;k+=2)P.push([p[k],p[k+1]]);if(P.length<6)return null;
+ const b=rawBox(p),w=b[2]-b[0],h=b[3]-b[1],size=Math.max(w,h);if(size<.025)return null;
+ const closed=Math.hypot(P[0][0]-P[P.length-1][0],P[0][1]-P[P.length-1][1])<size*.24;
+ if(closed){
+  if(Math.min(w,h)<size*.12)return null;
+  let far=0,fd=0;for(let i=1;i<P.length;i++){const d=Math.hypot(P[i][0]-P[0][0],P[i][1]-P[0][1]);if(d>fd){fd=d;far=i}}
+  const eps=size*.07;let V=rdp(P.slice(0,far+1),eps).concat(rdp(P.slice(far).concat([P[0]]),eps).slice(1,-1));
+  V=cleanPoly(V,true,size);
+  const cx=(b[0]+b[2])/2,cy=(b[1]+b[3])/2,rx=w/2,ry=h/2;let eE=0;for(const q of P)eE+=Math.abs(Math.hypot((q[0]-cx)/rx,(q[1]-cy)/ry)-1);eE/=P.length;
+  const eP=V.length>=3?polyErr(P,V,true)/size:1;
+  if(V.length>=3&&V.length<=6&&eP<.045&&eP*(V.length<=4?2:3)<eE){
+   if(V.length===4&&rectish(V))return{type:'poly',kind:'rect',closed:true,pts:[b[0],b[1],b[2],b[1],b[2],b[3],b[0],b[3]].map(r4)};
+   return{type:'poly',kind:V.length===3?'tri':'poly',closed:true,pts:V.flat().map(r4)};
+  }
+  if(eE<.16){let a=rx,c=ry;if(Math.abs(rx-ry)/Math.max(rx,ry)<.15)a=c=(rx+ry)/2;return{type:'ellipse',cx:r4(cx),cy:r4(cy),rx:r4(a),ry:r4(c)}}
+  return null;
+ }
+ const V=cleanPoly(rdp(P,size*.07),false,size);
+ if(V.length>=3&&V.length<=5&&polyErr(P,V,false)/size<.04)return{type:'poly',kind:'polyline',closed:false,pts:V.flat().map(r4)};
+ return null;
+}
+function shapePoints(sh){
+ if(sh.type==='ellipse'){const o=[];for(let j=0;j<=72;j++){const t=j/72*Math.PI*2;o.push(r4(sh.cx+sh.rx*Math.cos(t)),r4(sh.cy+sh.ry*Math.sin(t)))}return o}
+ const o=sh.pts.slice();if(sh.closed)o.push(sh.pts[0],sh.pts[1]);return o;
+}
+function shapeHandles(sh){
+ if(sh.type==='ellipse'){const c=Math.SQRT1_2;return[[sh.cx+sh.rx,sh.cy],[sh.cx,sh.cy+sh.ry],[sh.cx-sh.rx,sh.cy],[sh.cx,sh.cy-sh.ry],[sh.cx+sh.rx*c,sh.cy+sh.ry*c,'cn']]}
+ const o=[];for(let k=0;k<sh.pts.length;k+=2)o.push([sh.pts[k],sh.pts[k+1]]);return o;
+}
+function shapeName(sh){
+ if(sh.type==='ellipse')return Math.abs(sh.rx-sh.ry)<1e-4?'Circle':'Oval';
+ if(sh.kind==='rect'){const w=Math.abs(sh.pts[2]-sh.pts[0]),h=Math.abs(sh.pts[5]-sh.pts[3]);return Math.abs(w-h)/Math.max(w,h)<.08?'Square':'Rectangle'}
+ if(sh.kind==='tri')return'Triangle';if(sh.kind==='polyline')return'Lines';if(sh.kind==='line')return'Line';
+ if(sh.pts.length===8){let d=0;for(let k=0;k<8;k+=2){const a=Math.abs(Math.atan2(sh.pts[(k+3)%8]-sh.pts[k+1],sh.pts[(k+2)%8]-sh.pts[k]))%(Math.PI/2);d=Math.max(d,Math.abs(a-Math.PI/4))}return d<.3?'Diamond':'Four-sided shape'}
+ return({5:'Pentagon',6:'Hexagon'})[sh.pts.length/2]||'Shape';
+}
+function dragVertex(pt){
+ const it=cur.it,sh=it.shape,o=cur.orig,k=cur.k;cur.moved=true;
+ if(sh.type==='ellipse'){
+  if(k===4){const f=Math.max(.08,Math.hypot((pt.x-o.cx)/(o.rx||1e-3),(pt.y-o.cy)/(o.ry||1e-3)));sh.rx=r4(o.rx*f);sh.ry=r4(o.ry*f)}
+  else if(k%2===0)sh.rx=r4(Math.max(.004,Math.abs(pt.x-o.cx)));else sh.ry=r4(Math.max(.004,Math.abs(pt.y-o.cy)));
+  if(k!==4&&Math.abs(sh.rx-sh.ry)/Math.max(sh.rx,sh.ry)<.04){if(k%2===0)sh.rx=sh.ry;else sh.ry=sh.rx}
+ }else if(sh.kind==='rect'){
+  const P=[];for(let j=0;j<8;j+=2)P.push([o.pts[j],o.pts[j+1]]);const opp=P[(k+2)%4];
+  const nw=P.map((q,j)=>j===k?[pt.x,pt.y]:j===(k+2)%4?q:(Math.abs(q[0]-P[k][0])<1e-6?[pt.x,opp[1]]:[opp[0],pt.y]));
+  sh.pts=nw.flat().map(r4);
+ }else{sh.pts[2*k]=r4(pt.x);sh.pts[2*k+1]=r4(pt.y);
+  if(sh.kind==='line'){const o2=1-k,ox=sh.pts[2*o2],oy=sh.pts[2*o2+1],dx=pt.x-ox,dy=pt.y-oy,L=Math.hypot(dx,dy),a=Math.atan2(dy,dx),sn=Math.round(a/(Math.PI/4))*(Math.PI/4);if(Math.abs(a-sn)<.06){sh.pts[2*k]=r4(ox+Math.cos(sn)*L);sh.pts[2*k+1]=r4(oy+Math.sin(sn)*L)}}}
+ it.p=shapePoints(sh);it.q=new Array(it.p.length/2).fill(it.q&&it.q[0]!=null?it.q[0]:.55);
+ drawInk(cur.i);paintSel();
 }
 function detectShape(p){
  const n=p.length/2;let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
@@ -1066,7 +1198,7 @@ function splitStroke(it,pt,rad){
    for(let t=1;t<=m;t++){const f=t/(m+1);P.push(x+(x2-x)*f,y+(y2-y)*f);Q.push(qa+(qb-qa)*f)}}
  }
  const pieces=[];let cp=[],cq=[];
- const cut=()=>{if(cp.length>=4)pieces.push(Object.assign({},it,{p:cp.map(r4),q:cq.map(r2),s:1}));cp=[];cq=[]};
+ const cut=()=>{if(cp.length>=4){const pc=Object.assign({},it,{p:cp.map(r4),q:cq.map(r2),s:1});delete pc.shape;pieces.push(pc)}cp=[];cq=[]};
  for(let j=0;j<P.length/2;j++){const x=P[2*j],y=P[2*j+1];if(Math.hypot(x-pt.x,y-pt.y)<=rr)cut();else{cp.push(x,y);cq.push(Q[j])}}
  cut();return pieces;
 }
@@ -1075,7 +1207,7 @@ function splitStroke(it,pt,rad){
 function rawBox(p){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let k=0;k<p.length;k+=2){x0=Math.min(x0,p[k]);x1=Math.max(x1,p[k]);y0=Math.min(y0,p[k+1]);y1=Math.max(y1,p[k+1])}return[x0,y0,x1,y1]}
 const med=a=>{if(!a.length)return 0;const b=[...a].sort((x,y)=>x-y),m=b.length>>1;return b.length%2?b[m]:(b[m-1]+b[m])/2};
 function tidyPlan(items){
- const ink=items.filter(it=>(it.t==='pen'||it.t==='pencil')&&it.p&&it.p.length>=2);if(!ink.length)return null;
+ const ink=items.filter(it=>(it.t==='pen'||it.t==='pencil')&&!it.shape&&it.p&&it.p.length>=2);if(!ink.length)return null;
  const S0=ink.map(it=>{const b=rawBox(it.p);return{it,x0:b[0],y0:b[1],x1:b[2],y1:b[3],cx:(b[0]+b[2])/2,cy:(b[1]+b[3])/2,w:b[2]-b[0],h:b[3]-b[1]}});
  const H=Math.max(.008,med(S0.map(s=>s.h).filter(h=>h>.004)));
  const main=S0.filter(s=>Math.max(s.w,s.h)>=H*.45),marks=S0.filter(s=>Math.max(s.w,s.h)<H*.45);
@@ -1152,28 +1284,32 @@ function itemBox(it){
  const h=it.w*(isBlob(kindOf(it))?.8:.5);return[x0-h,y0-h,x1+h,y1+h];
 }
 function selBounds(){let b=[1e9,1e9,-1e9,-1e9];for(const it of sel.items){const q=itemBox(it);b=[Math.min(b[0],q[0]),Math.min(b[1],q[1]),Math.max(b[2],q[2]),Math.max(b[3],q[3])]}return b}
-function clearSel(){sel=null;$$('.sel,.selbar').forEach(x=>x.remove())}
+function clearSel(){sel=null;$$('.sel,.selbar,.shh').forEach(x=>x.remove())}
 const ic=(d)=>`<svg class="i" viewBox="0 0 24 24">${d}</svg>`;
 function paintSel(){
- $$('.sel,.selbar').forEach(x=>x.remove());if(!sel||!els[sel.i])return;
+ $$('.sel,.selbar,.shh').forEach(x=>x.remove());if(!sel||!els[sel.i])return;
  const el=els[sel.i],W=S.W,b=selBounds(),pad=6;
  const d=document.createElement('div');d.className='sel';
  Object.assign(d.style,{left:(b[0]*W-pad)+'px',top:(b[1]*W-pad)+'px',width:((b[2]-b[0])*W+pad*2)+'px',height:((b[3]-b[1])*W+pad*2)+'px'});
  d.innerHTML='<span class="h" aria-label="Resize"></span>';el.appendChild(d);
- if(cur&&(cur.mode==='move'||cur.mode==='scale'))return;
+ const one=sel.items.length===1&&sel.items[0].shape?sel.items[0]:null;
+ if(one){d.classList.add('shape');shapeHandles(one.shape).forEach(([x,y,c],k)=>{const h=document.createElement('span');h.className='shh'+(c?' '+c:'');h.dataset.k=k;h.setAttribute('aria-label','Adjust shape');h.style.left=(x*W)+'px';h.style.top=(y*W)+'px';el.appendChild(h)})}
+ if(cur&&(cur.mode==='move'||cur.mode==='scale'||cur.mode==='vtx'))return;
+ if(S.tool!=='lasso')return;
  const bar=document.createElement('div');bar.className='selbar glass';
  const top=b[1]*W-pad-60;bar.style.top=(top<4?(b[3]*W+pad+16):top)+'px';
  bar.style.left=(W<620?W/2:clamp((b[0]+b[2])/2*W,300,W-300))+'px';
  const hasInk=sel.items.some(it=>it.t!=='img');
  bar.innerHTML=(hasInk?['#111111','#3b5bfd','#e5383b','#0f9d7a','#f08c00'].map(c=>`<button class="sw" data-sc="${c}" style="background:${c}" aria-label="Recolour ${c}"></button>`).join('')+'<span class="vr"></span>':'')
-  +(sel.items.some(it=>it.t==='pen'||it.t==='pencil')?`<button data-sa="tidy">${ic('<path d="M4 20L15 9M17 4v3M19.5 6.5h-3M14 3.5l1 1M20 10l1 1"/><path d="M15 9l1.5-1.5"/>')}Tidy</button>`:'')
+  +(sel.items.some(it=>(it.t==='pen'||it.t==='pencil')&&!it.shape)?`<button data-sa="tidy">${ic('<path d="M4 20L15 9M17 4v3M19.5 6.5h-3M14 3.5l1 1M20 10l1 1"/><path d="M15 9l1.5-1.5"/>')}Tidy</button>`:'')
   +`<button data-sa="ai" class="aiB">${ic('<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/>')}Ask AI</button>`
   +`<button data-sa="dup">${ic('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>')}Duplicate</button>`
   +`<button data-sa="copy">Copy</button><button data-sa="cut">Cut</button>`
   +`<button data-sa="del" style="color:var(--bad)">${ic('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>')}Delete</button>`;
  el.appendChild(bar);
 }
-function shiftItem(it,dx,dy){if(it.t==='text'||it.t==='img'){it.x=r4(it.x+dx);it.y=r4(it.y+dy)}else it.p=it.p.map((v,j)=>r4(v+(j%2?dy:dx)));return it}
+function shiftShape(sh,X,Y,f){if(!sh)return;if(sh.type==='ellipse'){sh.cx=r4(X(sh.cx));sh.cy=r4(Y(sh.cy));sh.rx=r4(sh.rx*f);sh.ry=r4(sh.ry*f)}else sh.pts=sh.pts.map((v,j)=>r4(j%2?Y(v):X(v)))}
+function shiftItem(it,dx,dy){if(it.t==='text'||it.t==='img'){it.x=r4(it.x+dx);it.y=r4(it.y+dy)}else{it.p=it.p.map((v,j)=>r4(v+(j%2?dy:dx)));shiftShape(it.shape,x=>x+dx,y=>y+dy,1)}return it}
 function transformSel(pt){
  const b=cur.b;let f=1,dx=0,dy=0;
  if(cur.mode==='move'){dx=pt.x-cur.start.x;dy=pt.y-cur.start.y}
@@ -1183,7 +1319,7 @@ function transformSel(pt){
  sel.items.forEach((it,k)=>{const o=cur.orig[k];
   if(it.t==='text'){it.x=r4(X(o.x));it.y=r4(Y(o.y));it.z=r4(o.z*f)}
   else if(it.t==='img'){it.x=r4(X(o.x));it.y=r4(Y(o.y));it.w=r4(o.w*f);it.h=r4(o.h*f)}
-  else{it.p=o.p.map((v,j)=>r4(j%2?Y(v):X(v)));it.w=r4(o.w*f)}});
+  else{it.p=o.p.map((v,j)=>r4(j%2?Y(v):X(v)));it.w=r4(o.w*f);if(o.shape){it.shape=JSON.parse(JSON.stringify(o.shape));shiftShape(it.shape,X,Y,f)}}});
  drawInk(cur.i);paintSel();
 }
 function paste(){
@@ -1291,7 +1427,7 @@ function curPage(){if(!S.doc)return;const k=curIndex();$('#tPg').textContent=`Pa
  $$('#thumbs .th').forEach(t=>t.setAttribute('aria-current',+t.dataset.i===k))}
 let sraf=0;scroller.addEventListener('scroll',()=>{if(!sraf)sraf=requestAnimationFrame(()=>{sraf=0;curPage()})},{passive:true});
 function jumpTo(k){if(els[k])scroller.scrollTo({top:els[k].offsetTop-(parseFloat(getComputedStyle(pagesEl).paddingTop)-12),behavior:'smooth'})}
-function structural(){S.hist=[];S.redo=[];clearSel();const st=scroller.scrollTop;buildPages();scroller.scrollTop=st;save();buildThumbs();syncUndo();curPage()}
+function structural(){if(RF.on&&RF.doc&&S.doc&&RF.doc.id===S.doc.id){RF.doc=S.doc;refBuild()}S.hist=[];S.redo=[];clearSel();const st=scroller.scrollTop;buildPages();scroller.scrollTop=st;save();buildThumbs();syncUndo();curPage()}
 function addPage(k,paper){
  const d=S.doc,ref=d.pages[k];
  d.pages.splice(k+1,0,{s:null,r:ref?ref.r:A4,bg:paper||d.paper||'lined',a:[]});
@@ -1307,6 +1443,7 @@ async function pageMenu(k){
  const d=S.doc,p=d.pages[k];if(!p)return;
  const v=await sheet(`<h2>Page ${k+1}</h2><div class="list">
   <button data-v="bm">${ic('<path d="M6 3h12v18l-6-4-6 4z"/>')}${p.bm?'Remove bookmark':'Bookmark'}</button>
+  <button data-v="sec">${ic('<path d="M4 6h3M4 12h3M4 18h3M10 6h10M12 12h8M12 18h8"/>')}Start a section here</button>
   <button data-v="add">${ic('<path d="M12 5v14M5 12h14"/>')}Add page after</button>
   <button data-v="dup">${ic('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>')}Duplicate page</button>
   ${k>0?`<button data-v="up">${ic('<path d="M12 19V5m0 0-6 6m6-6 6 6"/>')}Move up</button>`:''}
@@ -1315,6 +1452,7 @@ async function pageMenu(k){
   <button data-v="img">${ic('<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 8"/>')}Save page as image</button>
   <div class="sep"></div><button data-v="del" class="bad">${ic('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>')}Delete page</button></div>`);
  if(v==='bm'){p.bm=!p.bm;save();buildThumbs();toast(p.bm?'Bookmarked page '+(k+1):'Bookmark removed',1400)}
+ else if(v==='sec')addSection(k);
  else if(v==='add')addPageSheet(k);
  else if(v==='dup'){d.pages.splice(k+1,0,JSON.parse(JSON.stringify(p)));structural();toast('Page duplicated')}
  else if(v==='up'||v==='down'){const j=v==='up'?k-1:k+1;[d.pages[k],d.pages[j]]=[d.pages[j],d.pages[k]];structural()}
@@ -1341,6 +1479,7 @@ $('#tMore').onclick=async()=>{
  const v=await sheet(`<h2>${esc(S.doc.name)}</h2><div class="list">
   <button data-v="pen">${ic('<path d="M3 21l3-1 9-9-2-2-9 9-1 3z"/><path d="M15 7l2 2M17 3l4 4-2 2-4-4z"/>')}Stylus only<span class="tog ${S.penOnly?'on':''}"></span></button>
   <button data-v="tidy">${ic('<path d="M4 20L15 9M17 4v3M19.5 6.5h-3M14 3.5l1 1M20 10l1 1"/><path d="M15 9l1.5-1.5"/>')}Tidy handwriting on this page</button>
+  <button data-v="split">${ic('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M12 4v16"/>')}Split view</button>
   <button data-v="read">${ic('<path d="M12 6.5C10 5 7 4.5 3 5v13c4-.5 7 0 9 1.5 2-1.5 5-2 9-1.5V5c-4-.5-7 0-9 1.5z"/><path d="M12 6.5v13"/>')}Reading mode</button>
   <button data-v="find">${ic('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>')}Find in document</button>
   <button data-v="zoom">${ic('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>')}Fit to width<small>${Math.round(S.zoom*100)}%</small></button>
@@ -1359,6 +1498,7 @@ $('#tMore').onclick=async()=>{
  if(v==='pen'){S.penOnly=!S.penOnly;ls.set('m.penOnly',S.penOnly?'1':'0');toast(S.penOnly?'Stylus only: fingers scroll':'Fingers draw too')}
  else if(v==='find')findSheet();
  else if(v==='read')enterRead();
+ else if(v==='split')refPicker();
  else if(v==='tidy')tidy(k,S.doc.pages[k].a,' on page '+(k+1));
  else if(v==='zoom')zoomAt(1,sr.left+sr.width/2,sr.top+sr.height/2);
  else if(v==='img')$('#fImg').click();
@@ -1385,6 +1525,7 @@ $('#fImg').onchange=async e=>{
 async function pageText(k){
  const p=S.doc.pages[k];let t='';
  if(p.s!=null&&S.pdf){if(S.txt[p.s]==null){try{const tc=await(await S.pdf.getPage(p.s+1)).getTextContent();S.txt[p.s]=tc.items.map(x=>x.str+(x.hasEOL?'\n':'')).join(' ').replace(/[ \t]+/g,' ')}catch(e){S.txt[p.s]=''}}t=S.txt[p.s]}
+ if(p.ocr)t+='\n'+p.ocr;
  for(const it of p.a)if(it.t==='text')t+='\n'+it.v;
  return t;
 }
@@ -1396,7 +1537,7 @@ function findSheet(){
    out.innerHTML='<p style="padding:0 12px">Searching…</p>';const res=[];
    for(let k=0;k<S.doc.pages.length&&res.length<60;k++){const t=await pageText(k);if(my!==tk)return;const lo=t.toLowerCase();let at=lo.indexOf(q),c=0;
     while(at>=0&&c<3&&res.length<60){const a=Math.max(0,at-40),b=Math.min(t.length,at+q.length+70);res.push({k,html:(a?'…':'')+esc(t.slice(a,at))+'<mark>'+esc(t.slice(at,at+q.length))+'</mark>'+esc(t.slice(at+q.length,b))+(b<t.length?'…':'')});at=lo.indexOf(q,at+q.length);c++}}
-   out.innerHTML=res.length?res.map(r=>`<button data-k="${r.k}"><b>Page ${r.k+1}</b>${r.html}</button>`).join(''):'<p style="padding:0 12px">No matches. Photos and scanned pages have no searchable text.</p>';
+   out.innerHTML=res.length?res.map(r=>`<button data-k="${r.k}"><b>Page ${r.k+1}</b>${r.html}</button>`).join(''):'<p style="padding:0 12px">No matches. If this is a scanned PDF or handwriting, open Pages, tap the list button, then Scan pages with AI. After that, search finds it.</p>';
   },220)});
   out.addEventListener('click',e=>{const b=e.target.closest('[data-k]');if(b){close(null);jumpTo(+b.dataset.k)}});
  });
@@ -1439,7 +1580,17 @@ function buildThumbs(){
  tio.disconnect();
  $$('#ptabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.pt===(S.ptab||'all')));
  const idx=S.doc.pages.map((p,i)=>i).filter(i=>S.ptab!=='bm'||S.doc.pages[i].bm);
- $('#thumbs').innerHTML=idx.length?idx.map(i=>{const p=S.doc.pages[i];return `<button class="th" data-i="${i}"><canvas style="aspect-ratio:1/${p.r}"></canvas>${p.bm?'<span class="bm"></span>':''}${i+1}</button>`}).join(''):'<p style="grid-column:1/-1;color:var(--mute);font-size:14px;margin:8px 2px">No bookmarks yet. Long-press a page, or use More, then Bookmark.</p>';
+ const th=i=>{const p=S.doc.pages[i];return `<button class="th" data-i="${i}"><canvas style="aspect-ratio:1/${p.r}"></canvas>${p.bm?'<span class="bm"></span>':''}${i+1}</button>`};
+ const heads=[];S.doc.pages.forEach((p,i)=>(p.heads||[]).forEach((h,j)=>heads.push(Object.assign({i,j},h))));
+ let html='';
+ if(S.ptab==='bm'||!heads.length)html=idx.map(th).join('');
+ else{
+  const n=S.doc.pages.length;if(heads[0].i>0)for(let i=0;i<heads[0].i;i++)html+=th(i);
+  heads.forEach((h,k)=>{const nx=k+1<heads.length?heads[k+1].i:n,end=nx>h.i?nx-1:h.i,lv=Math.min(3,(String(h.n).match(/\./g)||[]).length);
+   html+=`<div class="sech lv${lv}" data-go="${h.i}"><span class="sn">${esc(h.n||'•')}</span><span class="st">${esc(h.t||'Section')}</span><small>${end-h.i+1} p</small><button class="secm" data-hp="${h.i}" data-hj="${h.j}" aria-label="Edit section">${ic('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>')}</button></div>`;
+   for(let i=h.i;i<=end;i++)html+=th(i)});
+ }
+ $('#thumbs').innerHTML=html||'<p style="grid-column:1/-1;color:var(--mute);font-size:14px;margin:8px 2px">No bookmarks yet. Long-press a page, or use More, then Bookmark.</p>';
  $$('#thumbs .th').forEach(t=>tio.observe(t));curPage();
 }
 let tchain=Promise.resolve();
@@ -1458,7 +1609,10 @@ $('#thumbs').addEventListener('pointerdown',e=>{const t=e.target.closest('.th');
  const cancel=ev=>{if(!ev||Math.hypot(ev.clientX-x0,ev.clientY-y0)>10){clearTimeout(lpT);off()}};const off=()=>{removeEventListener('pointermove',cancel);removeEventListener('pointerup',up)};const up=()=>{clearTimeout(lpT);off()};
  addEventListener('pointermove',cancel);addEventListener('pointerup',up)});
 $('#thumbs').addEventListener('contextmenu',e=>{const t=e.target.closest('.th');if(t){e.preventDefault();if(!lpFired)pageMenu(+t.dataset.i);lpFired=true}});
-$('#thumbs').addEventListener('click',e=>{const t=e.target.closest('.th');if(!t)return;if(lpFired){lpFired=false;return}jumpTo(+t.dataset.i);if(innerWidth<760)$('#panel').classList.add('hidden')});
+$('#thumbs').addEventListener('click',e=>{
+ const m=e.target.closest('.secm');if(m){editSection(+m.dataset.hp,+m.dataset.hj);return}
+ const hd=e.target.closest('.sech');if(hd){jumpTo(+hd.dataset.go);if(innerWidth<760)$('#panel').classList.add('hidden');return}
+ const t=e.target.closest('.th');if(!t)return;if(lpFired){lpFired=false;return}jumpTo(+t.dataset.i);if(innerWidth<760)$('#panel').classList.add('hidden')});
 
 /* reading mode */
 let wake=null,rbT=0,fsByUs=false;
@@ -1487,7 +1641,7 @@ $('#readbar').addEventListener('click',e=>{const b=e.target.closest('[data-rt]')
 document.addEventListener('visibilitychange',async()=>{if(!document.hidden&&S.reading&&!wake){try{if(navigator.wakeLock)wake=await navigator.wakeLock.request('screen')}catch(e){}}});
 
 $('#tBack').onclick=async()=>{
- if(S.reading)exitRead();
+ if(S.reading)exitRead();closeRef();scanStop=true;
  const permP=SY.dir?ensurePerm(true):null;
  $('.page textarea')?.blur();clearSel();closeAI();if(R.mr)R.mr.stop();
  const d=S.doc;if(!d)return;
@@ -1498,7 +1652,7 @@ $('#tBack').onclick=async()=>{
  S.doc=null;S.pdf=null;io.disconnect();tio.disconnect();pagesEl.innerHTML='';els=[];vis.clear();
  showLib();if(permP)permP.then(ok=>{if(ok)syncAll()});
 };
-new ResizeObserver(()=>{if(S.doc)layout()}).observe(scroller);
+let mainW0=0;new ResizeObserver(()=>{if(!S.doc)return;const w=scroller.clientWidth;if(Math.abs(w-mainW0)<2)return;const first=!mainW0;mainW0=w;const k=curIndex(),off=els[k]?scroller.scrollTop-els[k].offsetTop:0;layout();if(!first&&els[k])scroller.scrollTop=els[k].offsetTop+off*(S.W/(els[k].offsetWidth||S.W))}).observe(scroller);
 document.addEventListener('keydown',e=>{
  if(!S.doc||/TEXTAREA|INPUT/.test(e.target.tagName))return;
  const mod=e.ctrlKey||e.metaKey,k=e.key.toLowerCase();
@@ -1558,6 +1712,156 @@ function paperPdf(pg,bg,rgb){
  else if(bg==='cornell'){const g=w*.038,sy=h*.8,c1=rgb(.84,.87,.93),c2=rgb(.62,.69,.81);for(let y=w*.14;y<sy-g*.3;y+=g)pg.drawLine({start:{x:w*.3,y:h-y},end:{x:w,y:h-y},thickness:.5,color:c1});
   pg.drawLine({start:{x:0,y:h-w*.1},end:{x:w,y:h-w*.1},thickness:1,color:c2});pg.drawLine({start:{x:w*.3,y:h-w*.1},end:{x:w*.3,y:h-sy},thickness:1,color:c2});pg.drawLine({start:{x:0,y:h-sy},end:{x:w,y:h-sy},thickness:1,color:c2})}
 }
+
+/* ---------- sections (1.1, 1.2 …) ---------- */
+const HEAD_RE=/^(?:(chapter|unit|topic|topik|subtopik|bab|section|lesson|part|module|modul)\s+)?(\d{1,2}(?:\.\d{1,2}){0,3})\.?\s*[:.\-–]?\s+([A-Za-z(À-ɏ].{1,80})$/i;
+async function detectSections(){
+ const d=S.doc,pdf=S.pdf;if(!d||!pdf)return 0;let found=0;
+ for(let k=0;k<d.pages.length;k++){
+  if(S.doc!==d)return found;const p=d.pages[k];if(p.s==null)continue;
+  let tc;try{tc=await(await pdf.getPage(p.s+1)).getTextContent()}catch(e){continue}
+  const items=tc.items.filter(x=>x.str&&x.str.trim());if(!items.length)continue;
+  const body=med(items.map(x=>Math.hypot(x.transform[2],x.transform[3])));
+  const rows=[];for(const x of items){const y=x.transform[5],h=Math.hypot(x.transform[2],x.transform[3]);let r=rows.find(r=>Math.abs(r.y-y)<=Math.max(2,h*.3));if(!r){r={y,h:0,parts:[]};rows.push(r)}r.parts.push(x);r.h=Math.max(r.h,h)}
+  rows.sort((a,b)=>b.y-a.y);
+  const heads=[];
+  for(const r of rows){const txt=r.parts.sort((a,b)=>a.transform[4]-b.transform[4]).map(x=>x.str).join(' ').replace(/\s+/g,' ').trim();if(txt.length>95)continue;
+   const m=txt.match(HEAD_RE);if(!m)continue;
+   const num=m[2],dotted=num.includes('.'),word=!!m[1],big=r.h>=body*1.15;
+   if(!(dotted||word||big))continue;if(!dotted&&!word&&+num>40)continue;
+   let title=m[3].replace(/\s*\.{3,}.*$/,'').replace(/\s+\d+$/,'').trim();if(title.length<2)continue;
+   heads.push({n:(word?m[1][0].toUpperCase()+m[1].slice(1).toLowerCase()+' ':'')+num,t:title,auto:'pdf'});
+  }
+  if(heads.length>6)continue; // a contents page, not real section starts
+  const keep=(p.heads||[]).filter(h=>h.auto!=='pdf');p.heads=keep.concat(heads);if(!p.heads.length)delete p.heads;found+=heads.length;
+ }
+ return found;
+}
+async function sectionSheet(){
+ const k=curIndex();
+ const v=await sheet(`<h2>Sections</h2><p>Sections like 1.1 and 1.2 show as headers in the pages panel, with their pages under them.</p><div class="list">
+  ${S.pdf?`<button data-v="det">${ic('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>')}Find sections in the PDF text<small>instant</small></button>`:''}
+  <button data-v="scan">${ic('<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/>')}Scan pages with AI<small>scans + handwriting</small></button>
+  <button data-v="add">${ic('<path d="M12 5v14M5 12h14"/>')}Start a section on page ${k+1}</button>
+  <div class="sep"></div><button data-v="clr" class="bad">${ic('<path d="M6 6l12 12M18 6L6 18"/>')}Clear sections found automatically</button></div>`);
+ if(v==='det'){toast('Looking for sections…',20000);const n=await detectSections();save();buildThumbs();toast(n?`Found ${n} section${n>1?'s':''}`:'No numbered headings found in the PDF text. Try Scan pages with AI.',3200)}
+ else if(v==='scan')scanSheet();
+ else if(v==='add')addSection(k);
+ else if(v==='clr'){S.doc.pages.forEach(p=>{if(p.heads){p.heads=p.heads.filter(h=>!h.auto);if(!p.heads.length)delete p.heads}});save();buildThumbs();toast('Cleared')}
+}
+async function addSection(k){
+ let n='',t='';
+ const r=await sheet(`<form><h2>New section on page ${k+1}</h2><label for="sn">Number</label><input type="text" id="sn" placeholder="e.g. 1.3" maxlength="16"><label for="stt">Title</label><input type="text" id="stt" placeholder="e.g. Osmosis" maxlength="80"><div class="acts"><button type="button" data-v="x">Cancel</button><button class="go">Add section</button></div></form>`,
+  m=>{m.querySelector('#sn').addEventListener('input',e=>n=e.target.value);m.querySelector('#stt').addEventListener('input',e=>t=e.target.value)});
+ if(r!=='ok'||!(n.trim()||t.trim()))return;
+ const p=S.doc.pages[k];(p.heads=p.heads||[]).push({n:n.trim(),t:t.trim(),auto:false});save();$('#panel').classList.remove('hidden');closeAI();buildThumbs();toast('Section added');
+}
+async function editSection(i,j){
+ const p=S.doc.pages[i],h=p&&p.heads&&p.heads[j];if(!h)return;let n=h.n,t=h.t;
+ const r=await sheet(`<form><h2>Section</h2><p>Starts on page ${i+1}.</p><label for="sn">Number</label><input type="text" id="sn" value="${esc(n)}" maxlength="16"><label for="stt">Title</label><input type="text" id="stt" value="${esc(t)}" maxlength="80"><div class="acts"><button type="button" data-v="del" class="bad">Remove</button><button type="button" data-v="x">Cancel</button><button class="go">Save</button></div></form>`,
+  m=>{m.querySelector('#sn').addEventListener('input',e=>n=e.target.value);m.querySelector('#stt').addEventListener('input',e=>t=e.target.value)});
+ if(r==='del'){p.heads.splice(j,1);if(!p.heads.length)delete p.heads}else if(r==='ok'){h.n=n.trim();h.t=t.trim();h.auto=false}else return;
+ save();buildThumbs();
+}
+
+/* ---------- AI scan: reads scans and handwriting for search + sections ---------- */
+let scanStop=false;
+async function aiJSON(prompt,blobs){
+ if(aiSample){const opts={};try{const lim=await aiSample.limits();if(lim&&lim.images)opts.images=blobs.slice(0,lim.images.maxCount||blobs.length)}catch(e){}return await aiSample.json(prompt,opts)}
+ if(!gKey())throw{code:'nokey'};
+ const parts=[{text:prompt}];for(const [k,b] of blobs.entries()){parts.push({text:'Image '+(k+1)});parts.push({inline_data:{mime_type:'image/jpeg',data:await blobB64(b)}})}
+ const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(gModel())}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':gKey()},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{responseMimeType:'application/json'}})});
+ if(!r.ok){let m='';try{m=(await r.json()).error.message}catch(e){}throw{code:'http',status:r.status,message:m}}
+ const j=await r.json();const t=((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(p=>p.text||'').join('');
+ return JSON.parse(t.replace(/^\s*```(?:json)?/,'').replace(/```\s*$/,'').trim());
+}
+async function scanSheet(){
+ if(!aiEngine()){toast('Turn on Study buddy first. It does the reading.',3000);openAI(false);return}
+ const d=S.doc,n=d.pages.length;let empty=[];for(let k=0;k<n;k++){if((await pageText(k)).replace(/\s/g,'').length<25||d.pages[k].a.some(it=>it.t==='pen'||it.t==='pencil'))empty.push(k)}
+ const v=await sheet(`<h2>Scan pages with AI</h2><p>Study buddy reads each page, including scans and your handwriting. Then search finds those words, and sections like 1.1 get spotted. It reads about 3 pages a go${aiSample?'':', so a long file takes a few minutes on the free Gemini key'}.</p><div class="list">
+  ${empty.length&&empty.length<n?`<button data-v="some">${ic('<path d="M4 6h16M4 12h10M4 18h6"/>')}Scan pages that need it<small>${empty.length} page${empty.length>1?'s':''}</small></button>`:''}
+  <button data-v="all">${ic('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>')}Scan every page<small>${n} page${n>1?'s':''}</small></button></div>`);
+ if(v==='some')runScan(empty);else if(v==='all')runScan([...Array(n).keys()]);
+}
+async function runScan(list){
+ const d=S.doc;if(!d||!list.length)return;scanStop=false;
+ $('#ai').classList.add('hidden');AI.open=false;$('#panel').classList.remove('hidden');buildThumbs();
+ const bar=$('#scanBar'),T=$('#scanT');bar.classList.remove('hidden');let done=0,heads=0,fail=0;
+ for(let c=0;c<list.length;c+=3){
+  if(scanStop||S.doc!==d)break;
+  const chunk=list.slice(c,c+3);T.textContent=`Reading page${chunk.length>1?'s':''} ${chunk.map(k=>k+1).join(', ')} (${done}/${list.length})…`;
+  const shots=[];for(const k of chunk){const sh=await pageShot(k);URL.revokeObjectURL(sh.url);shots.push(sh.blob)}
+  const prompt=`You will see ${chunk.length} image${chunk.length>1?'s':''}. ${chunk.map((k,x)=>`Image ${x+1} is page ${k+1}`).join('. ')} of a student's document. For each page: transcribe all readable text, printed and handwritten, in reading order (max 3000 characters), and list any section headings that START on that page, such as "1.1 Cell structure", "Chapter 2: Forces" or "Bab 3 Tenaga". Reply with only JSON in this shape: {"pages":[{"page":${chunk[0]+1},"text":"...","headings":[{"num":"1.1","title":"Cell structure"}]}]}. "num" is the heading number exactly as written, or "" if it has none. Use an empty headings list when no section starts on that page.`;
+  let res=null;
+  for(let tries=0;tries<2&&!res;tries++){try{res=await aiJSON(prompt,shots)}catch(e){if(e&&e.code==='http'&&e.status===429&&!tries){T.textContent='Free limit hit, waiting 30 seconds…';await new Promise(r=>setTimeout(r,30000))}else{fail++;if(e&&(e.code==='not_granted'||e.code==='sampling_disabled'||(e.code==='http'&&(e.status===400||e.status===403)))){toast(aiErr(e),4000);scanStop=true}break}}}
+  for(const pg of (res&&Array.isArray(res.pages)?res.pages:[])){
+   const k=(+pg.page||0)-1;if(!chunk.includes(k))continue;const p=d.pages[k];
+   if(typeof pg.text==='string')p.ocr=pg.text.slice(0,4000);
+   const hs=(Array.isArray(pg.headings)?pg.headings:[]).filter(h=>h&&(h.num||h.title)).slice(0,6).map(h=>({n:String(h.num||'').slice(0,16),t:String(h.title||'').slice(0,80),auto:'ai'}));
+   p.heads=(p.heads||[]).filter(h=>h.auto!=='ai').concat(hs);heads+=hs.length;if(!p.heads.length)delete p.heads;
+  }
+  done+=chunk.length;save();buildThumbs();
+  if(!aiSample&&c+3<list.length&&!scanStop)await new Promise(r=>setTimeout(r,4500));
+ }
+ bar.classList.add('hidden');S.txt={};
+ toast(scanStop&&done<list.length?`Stopped after ${done} pages`:fail?`Done, but ${fail} batch${fail>1?'es':''} failed. Try again later for those.`:`Read ${done} page${done>1?'s':''}${heads?`, found ${heads} section${heads>1?'s':''}`:''}. Search works on them now.`,3800);
+}
+$('#scanStop').onclick=()=>{scanStop=true;$('#scanT').textContent='Stopping after this batch…'};
+$('#pSec').onclick=sectionSheet;
+
+/* ---------- split view: a second file or page beside the one you write on ---------- */
+const RF={on:false,doc:null,pdf:null,zoom:1,els:[],W:400,vis:new Set(),chain:Promise.resolve(),ver:0};
+const refScroll=$('#refScroll'),refPages=$('#refPages');
+const rio=new IntersectionObserver(ents=>{for(const en of ents){const i=+en.target.dataset.i;if(en.isIntersecting){RF.vis.add(i);rqueue(i)}else{RF.vis.delete(i);en.target._key=null;const c=en.target.querySelector('canvas');c.width=0;c.height=0}}},{root:refScroll,rootMargin:'1000px 0px'});
+function rqueue(i){RF.chain=RF.chain.then(()=>refRender(i)).catch(()=>{})}
+async function pdfShot(pdf,s,cw,ch){const pg=await pdf.getPage(s+1);const v1=pg.getViewport({scale:1});const v=pg.getViewport({scale:cw/v1.width});const off=document.createElement('canvas');off.width=cw;off.height=ch;const oc=off.getContext('2d');oc.fillStyle='#fff';oc.fillRect(0,0,cw,ch);await pg.render({canvasContext:oc,viewport:v}).promise;return off}
+async function refRender(i){
+ const el=RF.els[i];if(!el||!RF.vis.has(i)||!RF.doc)return;const p=RF.doc.pages[i];if(!p)return;
+ const dpr=Math.min(devicePixelRatio||1,2.5);let cw=Math.round(RF.W*dpr),ch=Math.round(RF.W*p.r*dpr);const f=Math.min(1,Math.sqrt(12e6/(cw*ch)));cw=Math.round(cw*f);ch=Math.round(ch*f);
+ const key=cw+'x'+ch+':'+RF.ver;if(el._key===key)return;el._key=key;
+ const off=document.createElement('canvas');off.width=cw;off.height=ch;const x=off.getContext('2d');
+ if(p.s!=null&&RF.pdf)x.drawImage(await pdfShot(RF.pdf,p.s,cw,ch),0,0);else drawPaper(x,cw,ch,p.bg);
+ await Promise.all(p.a.filter(it=>it.t==='img').map(it=>ensureImg(it.ref)));
+ x.globalCompositeOperation='multiply';drawItems(x,p.a,cw);
+ if(el._key!==key)return;const c=el.querySelector('canvas');c.width=cw;c.height=ch;c.getContext('2d').drawImage(off,0,0);
+}
+function refLayout(){if(!RF.doc)return;const base=Math.min(refScroll.clientWidth-24,1000);RF.W=Math.max(140,Math.round(base*RF.zoom));RF.els.forEach((el,i)=>{el.style.width=RF.W+'px';el.style.height=Math.round(RF.W*RF.doc.pages[i].r)+'px';el._key=null});RF.vis.forEach(rqueue)}
+function refBuild(){rio.disconnect();RF.vis.clear();refPages.innerHTML=RF.doc.pages.map((p,i)=>`<div class="rpage" data-i="${i}"><canvas></canvas></div>`).join('');RF.els=[...refPages.children];refLayout();RF.els.forEach(e=>rio.observe(e));$('#refName').textContent=RF.doc.name;refPgPaint()}
+function refIndex(){const top=refScroll.scrollTop+refScroll.clientHeight*.3;let k=0;for(let i=0;i<RF.els.length;i++){if(RF.els[i].offsetTop<=top)k=i;else break}return k}
+function refPgPaint(){if(RF.doc)$('#refPg').textContent=`p. ${refIndex()+1} / ${RF.doc.pages.length}`}
+function refJump(k){if(RF.els[k])refScroll.scrollTop=RF.els[k].offsetTop-(parseFloat(getComputedStyle(refPages).paddingTop)-12)}
+refScroll.addEventListener('scroll',()=>requestAnimationFrame(refPgPaint),{passive:true});
+let refW0=0;new ResizeObserver(()=>{if(!RF.on)return;const w=refScroll.clientWidth;if(Math.abs(w-refW0)<2)return;refW0=w;const k=refIndex();refLayout();refJump(k)}).observe(refScroll);
+async function openRef(id,page){
+ const d=S.doc&&S.doc.id===id?S.doc:await store.get(id);if(!d)return;
+ if(RF.pdf){try{RF.pdf.destroy()}catch(e){}}RF.pdf=null;RF.doc=d;RF.zoom=1;
+ if(d.hasPdf&&pdfjs){try{const b=await store.getPdf(id);RF.pdf=await pdfjs.getDocument({data:new Uint8Array(b.slice(0))}).promise}catch(e){}}
+ RF.on=true;$('#reader').classList.add('split');$('#ref').classList.remove('hidden');
+ refBuild();requestAnimationFrame(()=>{if(page)refJump(page);refPgPaint()});
+}
+function closeRef(){if(!RF.on)return;RF.on=false;rio.disconnect();refPages.innerHTML='';RF.els=[];if(RF.pdf){try{RF.pdf.destroy()}catch(e){}}RF.pdf=null;RF.doc=null;$('#reader').classList.remove('split');$('#ref').classList.add('hidden')}
+async function refPicker(){
+ const docs=(await store.all()).sort((a,b)=>b.updated-a.updated);
+ const v=await sheet(`<h2>Split view</h2><p>Pick what to show beside your page. You keep writing on your page; the other side is for looking.</p><div class="list" style="max-height:52vh;overflow:auto">${docs.map(d=>`<button data-v="d:${d.id}">${d.hasPdf?ic('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>'):ic('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v18"/>')}${esc(d.name)}${S.doc&&d.id===S.doc.id?'<small>this file, other page</small>':d.folder?`<small>${esc(d.folder)}</small>`:''}</button>`).join('')}</div>`);
+ if(v&&v.startsWith('d:')){const id=v.slice(2);await openRef(id,S.doc&&id===S.doc.id?Math.max(0,curIndex()-1):0);if(S.doc&&id===S.doc.id)toast('Showing this file again. Scroll it to any page.',2400)}
+}
+async function refPagePick(){
+ if(!RF.doc)return;const n=RF.doc.pages.length,heads=[];RF.doc.pages.forEach((p,i)=>(p.heads||[]).forEach(h=>heads.push({i,h})));
+ const v=await sheet(`<h2>Go to page</h2>${heads.length?`<div class="list" style="max-height:30vh;overflow:auto;margin-bottom:10px">${heads.map(x=>`<button data-v="${x.i}"><b style="color:var(--acc);min-width:3ch">${esc(x.h.n||'•')}</b>${esc(x.h.t||'')}<small>p. ${x.i+1}</small></button>`).join('')}</div>`:''}<div class="opts" style="max-height:34vh;overflow:auto">${[...Array(n).keys()].map(k=>`<button type="button" class="opt" data-v="${k}" style="min-width:52px">${k+1}</button>`).join('')}</div>`);
+ if(v!=null&&v!=='x'&&!isNaN(+v))refJump(+v);
+}
+async function refSwap(){
+ if(!RF.doc||!S.doc)return;const a=S.doc.id,ap=curIndex(),b=RF.doc.id,bp=refIndex();
+ if(a===b){jumpTo(bp);refJump(ap);return}
+ await flush();await openDoc(b);setTimeout(()=>jumpTo(bp),60);await openRef(a,ap);
+}
+$('#tSplit').onclick=()=>{if(RF.on)closeRef();else refPicker()};
+$('#refClose').onclick=closeRef;
+$('#refPick').onclick=refPicker;
+$('#refPg').onclick=refPagePick;
+$('#refSwap').onclick=refSwap;
+$('#refZi').onclick=()=>{RF.zoom=Math.min(3,RF.zoom*1.25);const r=refScroll.scrollTop/Math.max(1,refScroll.scrollHeight);refLayout();refScroll.scrollTop=r*refScroll.scrollHeight};
+$('#refZo').onclick=()=>{RF.zoom=Math.max(.5,RF.zoom/1.25);const r=refScroll.scrollTop/Math.max(1,refScroll.scrollHeight);refLayout();refScroll.scrollTop=r*refScroll.scrollHeight};
 
 /* ---------- study buddy (AI) ---------- */
 const AI={open:false,ctx:null,turns:[],busy:false,ctl:null};
