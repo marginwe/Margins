@@ -945,7 +945,8 @@ function drawItems(ctx,items,s){
 function drawInk(i){
  const el=els[i];if(!el)return;const c=el.querySelector('canvas.ink');if(!c.width)return;
  const ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);
- if(cur&&cur.base&&cur.i===i&&cur.base.width===c.width){ctx.drawImage(cur.base,0,0);drawItems(ctx,[cur.item],c.width)}
+ if(cur&&cur.base&&cur.i===i&&cur.base.width===c.width){ctx.drawImage(cur.base,0,0);
+  const it=cur.item,pr=cur.pred;drawItems(ctx,[pr&&pr.length&&it&&!it.s?Object.assign({},it,{p:it.p.concat(pr),q:it.q.concat(pr.filter((_,j)=>j%2===0).map(()=>it.q[it.q.length-1]))}):it],c.width)}
  else drawItems(ctx,S.doc.pages[i].a,c.width);
  thumbDirty.add(i);refDirty.add(i);
 }
@@ -1074,6 +1075,11 @@ pagesEl.addEventListener('pointermove',e=>{
   if((pt.x-lx)**2+(pt.y-ly)**2>1.5e-6){const q=pressureOf(ev);p.push(r4(pt.x),r4(pt.y));cur.item.q.push(r2(q))}
   if(Math.hypot(pt.x-cur.anchor.x,pt.y-cur.anchor.y)>.006){cur.anchor=pt;armHold()}
  }
+ cur.pred=null;
+ if(!cur.erase&&!cur.shape&&!cur.straight&&predOn()&&e.getPredictedEvents){
+  const pe=e.getPredictedEvents();if(pe.length){const p=cur.item.p,lx=p[p.length-2],ly=p[p.length-1],t=[];
+   for(const ev of pe.slice(0,3)){const x=(ev.clientX-R.left)/R.width,y=(ev.clientY-R.top)/R.width;if(Math.hypot(x-lx,y-ly)>.03)break;t.push(r4(x),r4(y))}
+   if(t.length)cur.pred=t}}
  if(cur.erase)ring(e);
  if(!cur.erase)redraw(cur.i);
 });
@@ -1096,6 +1102,7 @@ function endPtr(e){
  if(c.base&&ic&&c.base.width===ic.width&&c.item){const x=ic.getContext('2d');x.clearRect(0,0,ic.width,ic.height);x.drawImage(c.base,0,0);drawItems(x,[c.item],ic.width);thumbDirty.add(i);refDirty.add(i)}else redraw(i);
  c.base=null;save();
 }
+function predOn(){return ls.get('m.pred')!=='0'}
 function pressureOf(ev){
  const L=cur.last;let q;
  if(ev.pointerType==='pen'&&ev.pressure>0)q=ev.pressure;
@@ -1581,6 +1588,7 @@ $('#tMore').onclick=async()=>{
  const k=curIndex(),p=S.doc.pages[k],na=(S.doc.audio||[]).length;
  const v=await sheet(`<h2>${esc(S.doc.name)}</h2><div class="list">
   <button data-v="pen">${ic('<path d="M3 21l3-1 9-9-2-2-9 9-1 3z"/><path d="M15 7l2 2M17 3l4 4-2 2-4-4z"/>')}Stylus only<span class="tog ${S.penOnly?'on':''}"></span></button>
+  <button data-v="pred">${ic('<path d="M4 18c3-6 6-9 10-9"/><path d="M14 9h2.5M18.5 9H21" stroke-dasharray="1.5 2"/>')}Ink keeps up with pen<small>predicts your stroke</small><span class="tog ${predOn()?'on':''}"></span></button>
   <button data-v="tidy">${ic('<path d="M4 20L15 9M17 4v3M19.5 6.5h-3M14 3.5l1 1M20 10l1 1"/><path d="M15 9l1.5-1.5"/>')}Tidy handwriting on this page</button>
   <button data-v="split">${ic('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M12 4v16"/>')}Split view</button>
   <button data-v="read">${ic('<path d="M12 6.5C10 5 7 4.5 3 5v13c4-.5 7 0 9 1.5 2-1.5 5-2 9-1.5V5c-4-.5-7 0-9 1.5z"/><path d="M12 6.5v13"/>')}Reading mode</button>
@@ -1598,6 +1606,7 @@ $('#tMore').onclick=async()=>{
   <button data-v="exp">${ic('<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 11v7m0 0-3-3m3 3 3-3"/>')}Save as PDF</button>
  </div><p style="margin:14px 0 0;font-size:13px">Gestures: pinch to zoom, two fingers to scroll, two-finger tap to undo. Hold the pen still at the end of a stroke to straighten it or snap a shape.</p>`);
  const sr=scroller.getBoundingClientRect();
+ if(v==='pred'){const on=!predOn();ls.set('m.pred',on?'1':'0');toast(on?'Prediction on: ink draws a little ahead of your pen':'Prediction off',2400);return}
  if(v==='pen'){S.penOnly=!S.penOnly;ls.set('m.penOnly',S.penOnly?'1':'0');toast(S.penOnly?'Stylus only: fingers scroll':'Fingers draw too')}
  else if(v==='find')findSheet();
  else if(v==='read')enterRead();
