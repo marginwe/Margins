@@ -932,17 +932,24 @@ function drawInk(i){
  const ctx=c.getContext('2d');ctx.clearRect(0,0,c.width,c.height);
  if(cur&&cur.base&&cur.i===i&&cur.base.width===c.width){ctx.drawImage(cur.base,0,0);drawItems(ctx,[cur.item],c.width)}
  else drawItems(ctx,S.doc.pages[i].a,c.width);
- thumbDirty.add(i);
+ thumbDirty.add(i);refDirty.add(i);
 }
 function makeBase(i){const c=els[i]&&els[i].querySelector('canvas.ink');if(!c||!c.width)return null;const b=document.createElement('canvas');b.width=c.width;b.height=c.height;b.getContext('2d').drawImage(c,0,0);return b}
 const rafSet=new Set();let raf=0;
 function redraw(i){rafSet.add(i);if(!raf)raf=requestAnimationFrame(()=>{raf=0;rafSet.forEach(drawInk);rafSet.clear()})}
 
 let saveT;
-function save(){if(S.doc)S.doc.dirty=true;clearTimeout(saveT);saveT=setTimeout(flush,400)}
+function save(){if(S.doc)S.doc.dirty=true;clearTimeout(saveT);saveT=setTimeout(saveIdle,1100)}
+function saveIdle(){if(cur||performance.now()-lastInput<1400){saveT=setTimeout(saveIdle,700);return}flush()}
+let lastInput=0;
 async function flush(){clearTimeout(saveT);if(!S.doc)return;S.doc.updated=Date.now();if(els.length)S.doc.lp=curIndex();
- if(RF.on&&RF.doc&&RF.doc.id===S.doc.id){RF.doc=S.doc;clearTimeout(RF.t);RF.t=setTimeout(()=>{RF.ver=(RF.ver||0)+1;RF.vis.forEach(rqueue)},600)}try{await store.put(S.doc)}catch(e){toast('Could not save. Storage may be full.',4000)}}
-function snap(i){S.hist.push({i,a:JSON.parse(JSON.stringify(S.doc.pages[i].a))});if(S.hist.length>300)S.hist.shift();S.redo=[];syncUndo()}
+ if(RF.on&&RF.doc&&RF.doc.id===S.doc.id){RF.doc=S.doc;clearTimeout(RF.t);RF.t=setTimeout(refInkUpdate,300)}try{await store.put(S.doc)}catch(e){toast('Could not save. Storage may be full.',4000)}}
+function snap(i,mut){
+ const pg=S.doc.pages[i];S.hist.push({i,a:pg.a.slice()});if(S.hist.length>300)S.hist.shift();S.redo=[];syncUndo();
+ if(!mut||!mut.length)return null;
+ const m=new Map(mut.map(it=>[it,JSON.parse(JSON.stringify(it))]));pg.a=pg.a.map(it=>m.get(it)||it);
+ if(sel&&sel.i===i)sel.items=sel.items.map(it=>m.get(it)||it);return m;
+}
 function undo(from,to){clearSel();const h=from.pop();if(!h)return;const pg=S.doc.pages[h.i];if(!pg)return syncUndo();to.push({i:h.i,a:pg.a});pg.a=h.a;redraw(h.i);save();syncUndo();buzz()}
 function syncUndo(){$('#tUndo').disabled=!S.hist.length;$('#tRedo').disabled=!S.redo.length}
 
@@ -991,7 +998,7 @@ function zoomAt(z,cx,cy){
 }
 let badgeT;function badge(t){const b=$('#zoomBadge');b.textContent=t;b.style.opacity=1;clearTimeout(badgeT);badgeT=setTimeout(()=>b.style.opacity=0,700)}
 
-pagesEl.addEventListener('pointerdown',e=>{
+pagesEl.addEventListener('pointerdown',e=>{lastInput=performance.now();
  if(e.target.closest('.selbar'))return;
  const open=$('.page textarea');if(open){if(e.target!==open){e.preventDefault();open.blur()}return}
  stopInertia();
@@ -1002,7 +1009,7 @@ pagesEl.addEventListener('pointerdown',e=>{
  }
  if(sel&&!cur&&S.tool!=='hand'){
   const hv=e.target.closest('.shh'),hs=e.target.closest('.sel .h');
-  if(hv||hs){e.preventDefault();try{pagesEl.setPointerCapture(e.pointerId)}catch(_){}const sEl=els[sel.i];snap(sel.i);
+  if(hv||hs){e.preventDefault();try{pagesEl.setPointerCapture(e.pointerId)}catch(_){}const sEl=els[sel.i];snap(sel.i,sel.items);
    if(hv){const it=sel.items[0];cur={id:e.pointerId,type:e.pointerType,mode:'vtx',i:sel.i,el:sEl,it,k:+hv.dataset.k,orig:JSON.parse(JSON.stringify(it.shape)),moved:false}}
    else cur={id:e.pointerId,type:e.pointerType,mode:'scale',i:sel.i,el:sEl,start:pos(e,sEl),orig:JSON.parse(JSON.stringify(sel.items)),b:selBounds(),moved:false};
    $$('.selbar').forEach(x=>x.remove());return}
@@ -1018,7 +1025,7 @@ pagesEl.addEventListener('pointerdown',e=>{
  e.preventDefault();
  const i=+el.dataset.i,page=S.doc.pages[i],pt=pos(e,el);
  if(S.tool==='lasso'){
-  if(sel&&e.target.closest('.sel')){const sEl=els[sel.i];snap(sel.i);cur={id:e.pointerId,type:e.pointerType,mode:e.target.closest('.h')?'scale':'move',i:sel.i,el:sEl,start:pos(e,sEl),orig:JSON.parse(JSON.stringify(sel.items)),b:selBounds(),moved:false};$$('.selbar').forEach(x=>x.remove());return}
+  if(sel&&e.target.closest('.sel')){const sEl=els[sel.i];snap(sel.i,sel.items);cur={id:e.pointerId,type:e.pointerType,mode:e.target.closest('.h')?'scale':'move',i:sel.i,el:sEl,start:pos(e,sEl),orig:JSON.parse(JSON.stringify(sel.items)),b:selBounds(),moved:false};$$('.selbar').forEach(x=>x.remove());return}
   clearSel();cur={id:e.pointerId,type:e.pointerType,mode:'lasso',i,el,pts:[r4(pt.x),r4(pt.y)]};return;
  }
  if(S.tool==='text'){openText(i,el,pt);return}
@@ -1037,14 +1044,14 @@ pagesEl.addEventListener('pointermove',e=>{
   const now=performance.now(),dt=Math.max(1,now-pan.t),dx=e.clientX-pan.x,dy=e.clientY-pan.y;
   scroller.scrollBy(-dx,-dy);pan.vx=pan.vx*.6+(dx/dt)*.4;pan.vy=pan.vy*.6+(dy/dt)*.4;pan.x=e.clientX;pan.y=e.clientY;pan.t=now;return;
  }
- if(!cur||e.pointerId!==cur.id)return;e.preventDefault();
+ if(!cur||e.pointerId!==cur.id)return;e.preventDefault();lastInput=performance.now();
  if(cur.mode==='laser'){laserAdd(e);return}
  if(cur.mode==='lasso'){const pt=pos(e,cur.el);const p=cur.pts;if(Math.hypot(pt.x-p[p.length-2],pt.y-p[p.length-1])>.003){p.push(r4(pt.x),r4(pt.y));lassoDraw()}return}
  if(cur.mode==='move'||cur.mode==='scale'){transformSel(pos(e,cur.el));return}
  if(cur.mode==='vtx'){dragVertex(pos(e,cur.el));return}
- const evs=e.getCoalescedEvents?e.getCoalescedEvents():[];
+ const evs=e.getCoalescedEvents?e.getCoalescedEvents():[],R=cur.el.getBoundingClientRect();
  for(const ev of (evs.length?evs:[e])){
-  const pt=pos(ev,cur.el);
+  const pt={x:(ev.clientX-R.left)/R.width,y:(ev.clientY-R.top)/R.width};
   if(cur.erase){erase(pt);continue}
   if(cur.shape)continue;
   if(cur.straight){setStraightEnd(pt);continue}
@@ -1069,8 +1076,10 @@ function endPtr(e){
  if(cur.erase){$('#ring').style.display='none';if(!cur.changed){S.hist.pop();syncUndo()}cur=null;save();return}
  clearTimeout(cur.holdT);const i=cur.i,c=cur;cur=null;
  if(c.straight&&c.item.p.length===4){c.item.shape={type:'poly',kind:'line',closed:false,pts:c.item.p.slice()}}
- if(c.item&&c.item.shape){sel={i,items:[c.item]};c.base=null;drawInk(i);paintSel()}else redraw(i);
- save();
+ if(c.item&&c.item.shape){sel={i,items:[c.item]};paintSel()}
+ const ic=els[i]&&els[i].querySelector('canvas.ink');
+ if(c.base&&ic&&c.base.width===ic.width&&c.item){const x=ic.getContext('2d');x.clearRect(0,0,ic.width,ic.height);x.drawImage(c.base,0,0);drawItems(x,[c.item],ic.width);thumbDirty.add(i);refDirty.add(i)}else redraw(i);
+ c.base=null;save();
 }
 function pressureOf(ev){
  const L=cur.last;let q;
@@ -1330,7 +1339,7 @@ function tidyPlan(items){
 }
 function tidy(i,items,label){
  const r=tidyPlan(items);if(!r||!r.plan.size)return toast('Nothing handwritten to tidy here');
- snap(i);const from=new Map([...r.plan.keys()].map(it=>[it,it.p.slice()]));const t0=performance.now(),D=320;
+ const mm=snap(i,[...r.plan.keys()]);r.plan=new Map([...r.plan].map(([it,to])=>[mm.get(it)||it,to]));const from=new Map([...r.plan.keys()].map(it=>[it,it.p.slice()]));const t0=performance.now(),D=320;
  const step=t=>{const k=Math.min(1,(t-t0)/D),e=1-Math.pow(1-k,3);
   for(const [it,to] of r.plan){const f=from.get(it);it.p=to.map((v,j)=>f[j]+(v-f[j])*e)}
   drawInk(i);if(sel&&sel.i===i)paintSel();
@@ -1409,7 +1418,7 @@ function paste(){
 }
 pagesEl.addEventListener('click',e=>{
  const b=e.target.closest('.selbar button');if(!b||!sel)return;const page=S.doc.pages[sel.i];
- if(b.dataset.sc){snap(sel.i);sel.items.forEach(it=>{if(it.t!=='img')it.c=b.dataset.sc});drawInk(sel.i);save();buzz();return}
+ if(b.dataset.sc){snap(sel.i,sel.items);sel.items.forEach(it=>{if(it.t!=='img')it.c=b.dataset.sc});drawInk(sel.i);save();buzz();return}
  const a=b.dataset.sa;
  if(a==='copy'||a==='cut'){S.clip=JSON.parse(JSON.stringify(sel.items));S.clipPage=sel.i;toast(a==='cut'?'Cut. Paste from More or the lasso bar.':'Copied',1600)}
  if(a==='del'||a==='cut'){snap(sel.i);const gone=new Set(sel.items);page.a=page.a.filter(it=>!gone.has(it));const i=sel.i;clearSel();drawInk(i);save();return}
@@ -1906,9 +1915,10 @@ async function localOCR(list,auto){
  try{
   const w=await tessWorker();
   for(const k of list){
+   while(!LO.stop&&S.doc===d&&(cur||performance.now()-lastInput<2500))await new Promise(r=>setTimeout(r,400));
    if(LO.stop||S.doc!==d)break;
    show(`Reading page ${k+1} on your tablet (${done+1}/${list.length})…`);
-   const c=await pageCanvas(k,1800);
+   const pk=d.pages[k],c=pk.s!=null&&S.pdf?await renderPdfPage(pk.s,1600,Math.round(1600*pk.r)):await pageCanvas(k,1600);
    const r=await w.recognize(c,{},{text:true,blocks:true});
    const lines=[];for(const b of r.data.blocks||[])for(const pa of b.paragraphs||[])for(const l of pa.lines||[])lines.push(l);
    const good=lines.filter(l=>l.confidence>=40&&/[A-Za-z0-9]{2}/.test(l.text));
@@ -1952,18 +1962,26 @@ $('#pSec').onclick=sectionSheet;
 /* ---------- split view: a second file or page beside the one you write on ---------- */
 const RF={on:false,doc:null,pdf:null,zoom:1,els:[],W:400,vis:new Set(),chain:Promise.resolve(),ver:0};
 const refScroll=$('#refScroll'),refPages=$('#refPages');
-const rio=new IntersectionObserver(ents=>{for(const en of ents){const i=+en.target.dataset.i;if(en.isIntersecting){RF.vis.add(i);rqueue(i)}else{RF.vis.delete(i);en.target._key=null;const c=en.target.querySelector('canvas');c.width=0;c.height=0}}},{root:refScroll,rootMargin:'1000px 0px'});
+const refDirty=new Set();
+const rio=new IntersectionObserver(ents=>{for(const en of ents){const i=+en.target.dataset.i;if(en.isIntersecting){RF.vis.add(i);rqueue(i)}else{RF.vis.delete(i);en.target._key=null;en.target._bg=null;const c=en.target.querySelector('canvas');c.width=0;c.height=0}}},{root:refScroll,rootMargin:'500px 0px'});
+/* same file on both sides: only repaint the ink of pages you actually changed, once you pause */
+function refInkUpdate(){
+ clearTimeout(RF.t);if(!RF.on||!RF.doc||!S.doc||RF.doc.id!==S.doc.id){refDirty.clear();return}
+ if(cur||performance.now()-lastInput<1200){RF.t=setTimeout(refInkUpdate,600);return}
+ for(const i of refDirty){const el=RF.els[i];if(el&&RF.vis.has(i)){el._v=(el._v||0)+1;rqueue(i)}}refDirty.clear();
+}
 function rqueue(i){RF.chain=RF.chain.then(()=>refRender(i)).catch(()=>{})}
 async function pdfShot(pdf,s,cw,ch){const pg=await pdf.getPage(s+1);const v1=pg.getViewport({scale:1});const v=pg.getViewport({scale:cw/v1.width});const off=document.createElement('canvas');off.width=cw;off.height=ch;const oc=off.getContext('2d');oc.fillStyle='#fff';oc.fillRect(0,0,cw,ch);await pg.render({canvasContext:oc,viewport:v}).promise;return off}
 async function refRender(i){
  const el=RF.els[i];if(!el||!RF.vis.has(i)||!RF.doc)return;const p=RF.doc.pages[i];if(!p)return;
  const dpr=Math.min(devicePixelRatio||1,2.5);let cw=Math.round(RF.W*dpr),ch=Math.round(RF.W*p.r*dpr);const f=Math.min(1,Math.sqrt(12e6/(cw*ch)));cw=Math.round(cw*f);ch=Math.round(ch*f);
- const key=cw+'x'+ch+':'+RF.ver;if(el._key===key)return;el._key=key;
- const off=document.createElement('canvas');off.width=cw;off.height=ch;const x=off.getContext('2d');
- if(p.s!=null&&RF.pdf)x.drawImage(await pdfShot(RF.pdf,p.s,cw,ch),0,0);else drawPaper(x,cw,ch,p.bg);
- await Promise.all(p.a.filter(it=>it.t==='img').map(it=>ensureImg(it.ref)));
- x.globalCompositeOperation='multiply';drawItems(x,p.a,cw);
- if(el._key!==key)return;const c=el.querySelector('canvas');c.width=cw;c.height=ch;c.getContext('2d').drawImage(off,0,0);
+ const sz=cw+'x'+ch,key=sz+':'+(el._v||0);if(el._key===key)return;el._key=key;
+ let bg=el._bg&&el._bgKey===sz?el._bg:null;
+ if(!bg){if(p.s!=null&&RF.pdf)bg=await pdfShot(RF.pdf,p.s,cw,ch);else{bg=document.createElement('canvas');bg.width=cw;bg.height=ch;drawPaper(bg.getContext('2d'),cw,ch,p.bg)}
+  if(el._key!==key)return;el._bg=bg;el._bgKey=sz}
+ if(p.a.some(it=>it.t==='img')){await Promise.all(p.a.filter(it=>it.t==='img').map(it=>ensureImg(it.ref)));if(el._key!==key)return}
+ const c=el.querySelector('canvas');if(c.width!==cw||c.height!==ch){c.width=cw;c.height=ch}
+ const x=c.getContext('2d');x.globalCompositeOperation='source-over';x.drawImage(bg,0,0);x.globalCompositeOperation='multiply';drawItems(x,p.a,cw);x.globalCompositeOperation='source-over';
 }
 function refLayout(){if(!RF.doc)return;const base=Math.min(refScroll.clientWidth-24,1000);RF.W=Math.max(140,Math.round(base*RF.zoom));RF.els.forEach((el,i)=>{el.style.width=RF.W+'px';el.style.height=Math.round(RF.W*RF.doc.pages[i].r)+'px';el._key=null});RF.vis.forEach(rqueue)}
 function refBuild(){rio.disconnect();RF.vis.clear();refPages.innerHTML=RF.doc.pages.map((p,i)=>`<div class="rpage" data-i="${i}"><canvas></canvas></div>`).join('');RF.els=[...refPages.children];refLayout();RF.els.forEach(e=>rio.observe(e));$('#refName').textContent=RF.doc.name;refPgPaint()}
