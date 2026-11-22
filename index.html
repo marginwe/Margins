@@ -314,6 +314,7 @@ svg.lasso{position:absolute;left:0;top:0;width:100%;height:100%;z-index:4;pointe
 .msg.a ul,.msg.a ol{margin:4px 0 8px;padding-left:20px}
 .msg.a li{margin:2px 0}
 .msg.a code{background:var(--surface2);padding:1px 5px;border-radius:5px;font-size:.92em}
+.msg .act .via{margin-left:auto;align-self:center;font-size:11px;font-weight:600;color:var(--mute)}
 .msg .err{color:var(--bad);font-size:13px;margin-top:6px}
 .msg .act{display:flex;gap:6px;margin-top:10px}
 .msg .act button{height:32px;padding:0 10px;border-radius:9px;border:1px solid var(--line);background:none;font-size:12px;font-weight:600;color:var(--mute)}
@@ -708,7 +709,7 @@ $('#bMenu').onclick=async()=>{
   <button data-v="p"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/></svg>Storage protection<small>${persisted?'on':'off'}</small></button>
   <button data-v="sync">${folderSvg}Auto-save folder<small>${SY.dir?esc(SY.dir.name):'off'}</small></button>
   <div class="sep"></div>
-  <button data-v="ai"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>Study buddy (AI)<small>${aiSample?'Claude':gKey()?'Gemini key set':'set up'}</small></button></div>`);
+  <button data-v="ai"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>Study buddy (AI)<small>${aiSample?'Claude':[gKey()&&'Gemini',gKey()&&gemmaOn()&&'Gemma',qKey()&&'Groq'].filter(Boolean).join(' + ')||'set up'}</small></button></div>`);
  if(v==='b')backup();else if(v==='r')$('#fRestore').click();else if(v==='p')$('#stPill').click();else if(v==='ai')aiSettings();else if(v==='sync')syncSheet();
 };
 async function newNotebook(){
@@ -826,6 +827,7 @@ async function openDoc(id){
  buildPages();scroller.scrollTop=0;scroller.scrollLeft=0;syncTb();
  const lp=doc.lp||0;if(lp&&els[lp])requestAnimationFrame(()=>{scroller.scrollTop=els[lp].offsetTop-80;curPage()});
  if(doc.hasPdf&&S.pdf&&!doc.secScan){const id=doc.id;detectSections().then(n=>{if(!S.doc||S.doc.id!==id)return;doc.secScan=1;save();if(n){buildThumbs();toast(`Found ${n} section${n>1?'s':''}. Open Pages to jump between them.`,3000)}}).catch(()=>{})}
+ setTimeout(()=>{if(S.doc===doc)localOCR(null,true)},2500);
 }
 function buildPages(){
  io.disconnect();vis.clear();sel=null;
@@ -1121,19 +1123,95 @@ function detectShape2(p){
   V=cleanPoly(V,true,size);
   const cx=(b[0]+b[2])/2,cy=(b[1]+b[3])/2,rx=w/2,ry=h/2;let eE=0;for(const q of P)eE+=Math.abs(Math.hypot((q[0]-cx)/rx,(q[1]-cy)/ry)-1);eE/=P.length;
   const eP=V.length>=3?polyErr(P,V,true)/size:1;
+  if(V.length>=5&&V.length<=8&&eE>.035){let U=V.slice();while(U.length>6){let bi=0,ba=1e9;for(let i=0;i<U.length;i++){const A=U[(i-1+U.length)%U.length],B=U[i],C=U[(i+1)%U.length],ar=Math.abs((B[0]-A[0])*(C[1]-A[1])-(C[0]-A[0])*(B[1]-A[1]));if(ar<ba){ba=ar;bi=i}}U.splice(bi,1)}
+   if(polyErr(P,U,true)/size<.04){const R=regularPoly(U);if(R)return R}}
   if(V.length>=3&&V.length<=6&&eP<.045&&eP*(V.length<=4?2:3)<eE){
    if(V.length===4&&rectish(V))return{type:'poly',kind:'rect',closed:true,pts:[b[0],b[1],b[2],b[1],b[2],b[3],b[0],b[3]].map(r4)};
+   if(V.length>=5){const R=regularPoly(V);if(R)return R}
    return{type:'poly',kind:V.length===3?'tri':'poly',closed:true,pts:V.flat().map(r4)};
   }
   if(eE<.16){let a=rx,c=ry;if(Math.abs(rx-ry)/Math.max(rx,ry)<.15)a=c=(rx+ry)/2;return{type:'ellipse',cx:r4(cx),cy:r4(cy),rx:r4(a),ry:r4(c)}}
   return null;
  }
- const V=cleanPoly(rdp(P,size*.07),false,size);
- if(V.length>=3&&V.length<=5&&polyErr(P,V,false)/size<.04)return{type:'poly',kind:'polyline',closed:false,pts:V.flat().map(r4)};
+ return detectOpen(P,size);
+}
+/* open strokes: straight line (null), arc, smooth curve, or zigzag with crisp corners */
+function detectOpen(P,size){
+ const A=P[0],B=P[P.length-1];let dev=0;for(const q of P)dev=Math.max(dev,segDist({x:q[0],y:q[1]},A[0],A[1],B[0],B[1]));
+ if(dev<size*.05)return null;
+ const V=cleanPoly(rdp(P,size*.06),false,size);
+ const eP=V.length>=3?polyErr(P,V,false)/size:1;
+ // one smooth bend → circular arc
+ const arc=fitArc(P,size);
+ if(arc&&arc.err<.022&&arc.err<eP*.8)return{type:'arc',pts:arc.pts.map(r4)};
+ // corners vs smooth: compare a polyline and a spline through the same knots
+ const K=rdp(P,size*.045).slice(0,14),eS=K.length>=3?polyErr(P,splinePts(K.flat(),10),false)/size:1;
+ if(V.length>=3&&V.length<=16&&eP<.035&&eP<=eS*1.15)return regularChain(V);
+ if(K.length>=3&&eS<.03)return{type:'curve',pts:K.flat().map(r4)};
+ if(V.length>=3&&V.length<=16&&eP<.045)return regularChain(V);
  return null;
+}
+function fitArc(P,size){
+ // least-squares circle (Kåsa)
+ let sx=0,sy=0,sxx=0,syy=0,sxy=0,sz=0,sxz=0,syz=0;const n=P.length;
+ for(const[x,y]of P){const z=x*x+y*y;sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;sz+=z;sxz+=x*z;syz+=y*z}
+ const M=[[sxx,sxy,sx],[sxy,syy,sy],[sx,sy,n]],r=[-sxz,-syz,-sz];
+ const det=m=>m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])-m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])+m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
+ const D0=det(M);if(Math.abs(D0)<1e-14)return null;
+ const col=(k)=>M.map((row,i)=>row.map((v,j)=>j===k?r[i]:v));
+ const D=det(col(0))/D0,E=det(col(1))/D0,F=det(col(2))/D0,cx=-D/2,cy=-E/2,R=Math.sqrt(Math.max(0,cx*cx+cy*cy-F));
+ if(!R||R>size*4)return null;
+ let err=0;for(const[x,y]of P)err+=Math.abs(Math.hypot(x-cx,y-cy)-R);err/=n*size;
+ const ang=q=>Math.atan2(q[1]-cy,q[0]-cx),TAU=Math.PI*2,mod=a=>((a%TAU)+TAU)%TAU;
+ const a0=ang(P[0]),a1=ang(P[n-1]),am=ang(P[n>>1]);const d1=mod(a1-a0),dm=mod(am-a0);const sw=dm<d1?d1:d1-TAU;
+ if(Math.abs(sw)>TAU*.8)return null;
+ const at=a=>[cx+R*Math.cos(a),cy+R*Math.sin(a)];
+ return{err,pts:[...at(a0),...at(a0+sw/2),...at(a0+sw)]};
+}
+function arcPts(p){
+ const[ax,ay,mx,my,bx,by]=p,d=2*(ax*(my-by)+mx*(by-ay)+bx*(ay-my));
+ if(Math.abs(d)<1e-9)return[ax,ay,bx,by];
+ const a2=ax*ax+ay*ay,m2=mx*mx+my*my,b2=bx*bx+by*by;
+ const cx=(a2*(my-by)+m2*(by-ay)+b2*(ay-my))/d,cy=(a2*(bx-mx)+m2*(ax-bx)+b2*(mx-ax))/d,R=Math.hypot(ax-cx,ay-cy);
+ if(R>50)return[ax,ay,mx,my,bx,by];
+ const TAU=Math.PI*2,mod=a=>((a%TAU)+TAU)%TAU,a0=Math.atan2(ay-cy,ax-cx),d1=mod(Math.atan2(by-cy,bx-cx)-a0),dm=mod(Math.atan2(my-cy,mx-cx)-a0),sw=dm<d1?d1:d1-TAU;
+ const N=Math.max(12,Math.min(96,Math.round(Math.abs(sw)*18))),o=[];
+ for(let j=0;j<=N;j++){const t=a0+sw*j/N;o.push(r4(cx+R*Math.cos(t)),r4(cy+R*Math.sin(t)))}return o;
+}
+function splinePts(p,per){
+ // centripetal Catmull-Rom through the knots
+ const K=[];for(let k=0;k<p.length;k+=2)K.push([p[k],p[k+1]]);if(K.length<3)return K;
+ const n=K.length,ext=[[2*K[0][0]-K[1][0],2*K[0][1]-K[1][1]],...K,[2*K[n-1][0]-K[n-2][0],2*K[n-1][1]-K[n-2][1]]],o=[K[0].slice()];
+ const tj=(a,b,t)=>t+Math.pow(Math.hypot(b[0]-a[0],b[1]-a[1])||1e-6,.5);
+ for(let i=0;i<n-1;i++){const[P0,P1,P2,P3]=ext.slice(i,i+4);const t0=0,t1=tj(P0,P1,t0),t2=tj(P1,P2,t1),t3=tj(P2,P3,t2);
+  for(let j=1;j<=per;j++){const t=t1+(t2-t1)*j/per;const L=(a,b,ta,tb)=>[(tb-t)/(tb-ta)*a[0]+(t-ta)/(tb-ta)*b[0],(tb-t)/(tb-ta)*a[1]+(t-ta)/(tb-ta)*b[1]];
+   const A1=L(P0,P1,t0,t1),A2=L(P1,P2,t1,t2),A3=L(P2,P3,t2,t3),B1=L(A1,A2,t0,t2),B2=L(A2,A3,t1,t3);o.push(L(B1,B2,t1,t2))}}
+ return o;
+}
+/* zigzags (like chemistry chains): crisp corners, bonds snapped to 30° steps, even lengths when they're close */
+function regularChain(V){
+ const seg=[];for(let i=1;i<V.length;i++){const dx=V[i][0]-V[i-1][0],dy=V[i][1]-V[i-1][1];seg.push({L:Math.hypot(dx,dy),a:Math.atan2(dy,dx)})}
+ const st=Math.PI/6;for(const g of seg){const sn=Math.round(g.a/st)*st;if(Math.abs(g.a-sn)<.15)g.a=sn}
+ const mean=seg.reduce((a,g)=>a+g.L,0)/seg.length;if(seg.every(g=>Math.abs(g.L-mean)<mean*(seg.length>=3?.3:.2)))seg.forEach(g=>g.L=mean);
+ const out=[V[0][0],V[0][1]];let x=V[0][0],y=V[0][1];for(const g of seg){x+=Math.cos(g.a)*g.L;y+=Math.sin(g.a)*g.L;out.push(x,y)}
+ const turns=seg.slice(1).map((g,i)=>Math.sin(g.a-seg[i].a));const zig=turns.length>=2&&turns.every((t,i)=>!i||t*turns[i-1]<0);
+ return{type:'poly',kind:zig?'zigzag':'polyline',closed:false,pts:out.map(r4)};
+}
+/* near-regular pentagons/hexagons (benzene rings) become perfectly regular */
+function regularPoly(V){
+ const n=V.length,cx=V.reduce((a,q)=>a+q[0],0)/n,cy=V.reduce((a,q)=>a+q[1],0)/n;
+ const L=V.map((q,i)=>Math.hypot(V[(i+1)%n][0]-q[0],V[(i+1)%n][1]-q[1])),mL=L.reduce((a,b)=>a+b,0)/n;
+ const R=V.map(q=>Math.hypot(q[0]-cx,q[1]-cy)),mR=R.reduce((a,b)=>a+b,0)/n;
+ if(L.some(l=>Math.abs(l-mL)>mL*.3)||R.some(r=>Math.abs(r-mR)>mR*.22))return null;
+ let area=0;for(let i=0;i<n;i++)area+=V[i][0]*V[(i+1)%n][1]-V[(i+1)%n][0]*V[i][1];const dir=area>0?1:-1;
+ let a0=Math.atan2(V[0][1]-cy,V[0][0]-cx);const sn=Math.round(a0/(Math.PI/6))*(Math.PI/6);if(Math.abs(a0-sn)<.2)a0=sn;
+ const pts=[];for(let i=0;i<n;i++){const t=a0+dir*i*2*Math.PI/n;pts.push(cx+mR*Math.cos(t),cy+mR*Math.sin(t))}
+ return{type:'poly',kind:'poly',closed:true,pts:pts.map(r4)};
 }
 function shapePoints(sh){
  if(sh.type==='ellipse'){const o=[];for(let j=0;j<=72;j++){const t=j/72*Math.PI*2;o.push(r4(sh.cx+sh.rx*Math.cos(t)),r4(sh.cy+sh.ry*Math.sin(t)))}return o}
+ if(sh.type==='arc')return arcPts(sh.pts);
+ if(sh.type==='curve')return splinePts(sh.pts,14).flat().map(r4);
  const o=sh.pts.slice();if(sh.closed)o.push(sh.pts[0],sh.pts[1]);return o;
 }
 function shapeHandles(sh){
@@ -1143,6 +1221,7 @@ function shapeHandles(sh){
 function shapeName(sh){
  if(sh.type==='ellipse')return Math.abs(sh.rx-sh.ry)<1e-4?'Circle':'Oval';
  if(sh.kind==='rect'){const w=Math.abs(sh.pts[2]-sh.pts[0]),h=Math.abs(sh.pts[5]-sh.pts[3]);return Math.abs(w-h)/Math.max(w,h)<.08?'Square':'Rectangle'}
+ if(sh.type==='arc')return'Arc';if(sh.type==='curve')return'Curve';if(sh.kind==='zigzag')return'Zigzag';
  if(sh.kind==='tri')return'Triangle';if(sh.kind==='polyline')return'Lines';if(sh.kind==='line')return'Line';
  if(sh.pts.length===8){let d=0;for(let k=0;k<8;k+=2){const a=Math.abs(Math.atan2(sh.pts[(k+3)%8]-sh.pts[k+1],sh.pts[(k+2)%8]-sh.pts[k]))%(Math.PI/2);d=Math.max(d,Math.abs(a-Math.PI/4))}return d<.3?'Diamond':'Four-sided shape'}
  return({5:'Pentagon',6:'Hexagon'})[sh.pts.length/2]||'Shape';
@@ -1741,10 +1820,10 @@ async function sectionSheet(){
  const k=curIndex();
  const v=await sheet(`<h2>Sections</h2><p>Sections like 1.1 and 1.2 show as headers in the pages panel, with their pages under them.</p><div class="list">
   ${S.pdf?`<button data-v="det">${ic('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>')}Find sections in the PDF text<small>instant</small></button>`:''}
-  <button data-v="scan">${ic('<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/>')}Scan pages with AI<small>scans + handwriting</small></button>
+  <button data-v="scan">${ic('<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/>')}Scan pages<small>quick or AI</small></button>
   <button data-v="add">${ic('<path d="M12 5v14M5 12h14"/>')}Start a section on page ${k+1}</button>
   <div class="sep"></div><button data-v="clr" class="bad">${ic('<path d="M6 6l12 12M18 6L6 18"/>')}Clear sections found automatically</button></div>`);
- if(v==='det'){toast('Looking for sections…',20000);const n=await detectSections();save();buildThumbs();toast(n?`Found ${n} section${n>1?'s':''}`:'No numbered headings found in the PDF text. Try Scan pages with AI.',3200)}
+ if(v==='det'){toast('Looking for sections…',20000);const n=await detectSections();save();buildThumbs();toast(n?`Found ${n} section${n>1?'s':''}`:'No numbered headings found in the PDF text. Try Scan pages.',3200)}
  else if(v==='scan')scanSheet();
  else if(v==='add')addSection(k);
  else if(v==='clr'){S.doc.pages.forEach(p=>{if(p.heads){p.heads=p.heads.filter(h=>!h.auto);if(!p.heads.length)delete p.heads}});save();buildThumbs();toast('Cleared')}
@@ -1768,23 +1847,84 @@ async function editSection(i,j){
 let scanStop=false;
 async function aiJSON(prompt,blobs){
  if(aiSample){const opts={};try{const lim=await aiSample.limits();if(lim&&lim.images)opts.images=blobs.slice(0,lim.images.maxCount||blobs.length)}catch(e){}return await aiSample.json(prompt,opts)}
- if(!gKey())throw{code:'nokey'};
- const parts=[{text:prompt}];for(const [k,b] of blobs.entries()){parts.push({text:'Image '+(k+1)});parts.push({inline_data:{mime_type:'image/jpeg',data:await blobB64(b)}})}
- const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(gModel())}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':gKey()},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{responseMimeType:'application/json'}})});
- if(!r.ok){let m='';try{m=(await r.json()).error.message}catch(e){}throw{code:'http',status:r.status,message:m}}
- const j=await r.json();const t=((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(p=>p.text||'').join('');
- return JSON.parse(t.replace(/^\s*```(?:json)?/,'').replace(/```\s*$/,'').trim());
+ const t=await runAI({system:'',hist:[{role:'user',content:prompt}],imgs:blobs.map((b,k)=>({label:'Image '+(k+1),blob:b})),json:true});
+ const a=t.indexOf('{'),z=t.lastIndexOf('}');return JSON.parse(a>=0&&z>a?t.slice(a,z+1):t);
 }
 async function scanSheet(){
- if(!aiEngine()){toast('Turn on Study buddy first. It does the reading.',3000);openAI(false);return}
  const d=S.doc,n=d.pages.length;let empty=[];for(let k=0;k<n;k++){if((await pageText(k)).replace(/\s/g,'').length<25||d.pages[k].a.some(it=>it.t==='pen'||it.t==='pencil'))empty.push(k)}
- const v=await sheet(`<h2>Scan pages with AI</h2><p>Study buddy reads each page, including scans and your handwriting. Then search finds those words, and sections like 1.1 get spotted. It reads about 3 pages a go${aiSample?'':', so a long file takes a few minutes on the free Gemini key'}.</p><div class="list">
-  ${empty.length&&empty.length<n?`<button data-v="some">${ic('<path d="M4 6h16M4 12h10M4 18h6"/>')}Scan pages that need it<small>${empty.length} page${empty.length>1?'s':''}</small></button>`:''}
-  <button data-v="all">${ic('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>')}Scan every page<small>${n} page${n>1?'s':''}</small></button></div>`);
- if(v==='some')runScan(empty);else if(v==='all')runScan([...Array(n).keys()]);
+ const v=await sheet(`<h2>Scan pages</h2><p><b style="color:var(--ink)">Quick scan</b> runs on this tablet: free, offline, no limits. Best for printed text. <b style="color:var(--ink)">AI scan</b> also reads handwriting, but it's slower and uses your free AI answers.</p><div class="list">
+  <button data-v="qs">${ic('<path d="M4 7V5a1 1 0 011-1h2M17 4h2a1 1 0 011 1v2M20 17v2a1 1 0 01-1 1h-2M7 20H5a1 1 0 01-1-1v-2M8 9h8M8 12h8M8 15h5"/>')}Quick scan on this tablet<small>printed text</small></button>
+  ${empty.length&&empty.length<n?`<button data-v="some">${ic('<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/>')}AI scan, pages that need it<small>${empty.length} page${empty.length>1?'s':''}</small></button>`:''}
+  <button data-v="all">${ic('<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/>')}AI scan, every page<small>${n} page${n>1?'s':''}</small></button>
+  <div class="sep"></div><button data-v="auto">${ic('<path d="M4 12a8 8 0 0114-5.3M20 12a8 8 0 01-14 5.3M18 3v4h-4M6 21v-4h4"/>')}Quick scan new scanned PDFs by itself<small>${ls.get('m.autoOcr')==='0'?'off':'on'}</small></button></div>`);
+ if(v==='qs'){const need=[];for(let k=0;k<n;k++){const p=d.pages[k];if(p.ocrBy!=='ai'&&await needsOCR(k,true))need.push(k)}localOCR(need.length?need:[...Array(n).keys()].filter(k=>d.pages[k].ocrBy!=='ai'),false);return}
+ if(v==='auto'){const off=ls.get('m.autoOcr')==='0';ls.set('m.autoOcr',off?'1':'0');toast(off?'Scanned PDFs get read by themselves now':'Auto scan off. Use Quick scan when you need it.',2600);return}
+ if(v!=='some'&&v!=='all')return;
+ if(!aiEngine()){toast('Turn on Study buddy first. It does the reading.',3000);openAI(false);return}
+ if(v==='some')runScan(empty);else runScan([...Array(n).keys()]);
+}
+/* ---------- quick scan: Tesseract OCR on the tablet itself ---------- */
+const LO={stop:false,busy:false,w:null,idle:0};
+function loadTess(){
+ if(window.Tesseract)return Promise.resolve();
+ if(!loadTess.p)loadTess.p=new Promise((ok,bad)=>{const sc=document.createElement('script');sc.src='tesseract.min.js';sc.onload=ok;sc.onerror=()=>{loadTess.p=null;bad({code:'tessfile'})};document.head.appendChild(sc)});
+ return loadTess.p;
+}
+async function tessWorker(){
+ clearTimeout(LO.idle);if(LO.w)return LO.w;await loadTess();
+ const u=f=>new URL(f,location.href).href;
+ LO.w=await Tesseract.createWorker('eng',1,{workerPath:u('tesseract-worker.min.js'),corePath:u('tesseract-core.wasm.js'),langPath:u('./').replace(/\/$/,''),gzip:true,workerBlobURL:false});
+ return LO.w;
+}
+function tessSleep(){clearTimeout(LO.idle);LO.idle=setTimeout(()=>{if(LO.w&&!LO.busy){LO.w.terminate().catch(()=>{});LO.w=null}},60000)}
+async function needsOCR(k,force){
+ const p=S.doc.pages[k];if(p.ocr&&!force)return false;if(p.ocrTry&&!force)return false;
+ if(p.s!=null&&S.pdf){await pageText(k);return (S.txt[p.s]||'').replace(/\s/g,'').length<25}
+ return p.a.some(it=>it.t==='img');
+}
+function ocrHeads(lines){
+ const hs=lines.map(l=>l.bbox.y1-l.bbox.y0).filter(h=>h>0),body=med(hs)||1,out=[];
+ for(const l of lines){
+  const txt=l.text.replace(/\s+/g,' ').trim();if(txt.length>95||l.confidence<55)continue;
+  const m=txt.match(HEAD_RE);if(!m)continue;
+  const num=m[2],dotted=num.includes('.'),word=!!m[1],big=(l.bbox.y1-l.bbox.y0)>=body*1.2;
+  if(!(dotted||word||big))continue;if(!dotted&&!word&&+num>40)continue;
+  const title=m[3].replace(/\s*\.{3,}.*$/,'').replace(/\s+\d+$/,'').trim();if(title.length<2)continue;
+  out.push({n:(word?m[1][0].toUpperCase()+m[1].slice(1).toLowerCase()+' ':'')+num,t:title,auto:'ocr'});
+ }
+ return out.length>6?[]:out;
+}
+async function localOCR(list,auto){
+ const d=S.doc;if(!d||LO.busy)return;
+ if(auto){if(ls.get('m.autoOcr')==='0')return;list=[];for(let k=0;k<d.pages.length;k++){if(S.doc!==d)return;if(await needsOCR(k))list.push(k)}}
+ if(!list||!list.length){if(!auto)toast('Nothing to scan here',2000);return}
+ LO.busy=true;LO.stop=false;const bar=$('#scanBar'),T=$('#scanT');let done=0,heads=0,words=0;
+ const show=t=>{T.textContent=t;bar.classList.remove('hidden')};
+ if(!auto){$('#panel').classList.remove('hidden');closeAI();buildThumbs()}
+ show(`Getting the scanner ready…`);
+ if(auto)toast(`Scanned PDF. Reading ${list.length} page${list.length>1?'s':''} on your tablet so search works…`,3200);
+ try{
+  const w=await tessWorker();
+  for(const k of list){
+   if(LO.stop||S.doc!==d)break;
+   show(`Reading page ${k+1} on your tablet (${done+1}/${list.length})…`);
+   const c=await pageCanvas(k,1800);
+   const r=await w.recognize(c,{},{text:true,blocks:true});
+   const lines=[];for(const b of r.data.blocks||[])for(const pa of b.paragraphs||[])for(const l of pa.lines||[])lines.push(l);
+   const good=lines.filter(l=>l.confidence>=40&&/[A-Za-z0-9]{2}/.test(l.text));
+   const p=d.pages[k];if(p.ocrBy==='ai'){done++;continue}
+   const txt=good.map(l=>l.text.trim()).join('\n').slice(0,4000);
+   if(txt){p.ocr=txt;p.ocrBy='local';words+=txt.split(/\s+/).length}p.ocrTry=1;
+   const hs=ocrHeads(good);p.heads=(p.heads||[]).filter(h=>h.auto!=='ocr').concat(hs);heads+=hs.length;if(!p.heads.length)delete p.heads;
+   done++;S.txt={};save();if(hs.length||!auto)buildThumbs();
+   await new Promise(r=>setTimeout(r,60));
+  }
+ }catch(e){console.warn(e);if(!auto)toast(e&&e.code==='tessfile'?'Quick scan files are missing. Upload the 4 tesseract files to your app folder.':'Quick scan hit a problem. Try AI scan instead.',4000)}
+ LO.busy=false;bar.classList.add('hidden');tessSleep();
+ if(done&&S.doc===d){buildThumbs();toast(`Read ${done} page${done>1?'s':''}${heads?`, found ${heads} section${heads>1?'s':''}`:''}. Search works on ${done>1?'them':'it'} now.`,3400)}
 }
 async function runScan(list){
- const d=S.doc;if(!d||!list.length)return;scanStop=false;
+ const d=S.doc;if(!d||!list.length)return;scanStop=false;LO.stop=true;while(LO.busy)await new Promise(r=>setTimeout(r,200));
  $('#ai').classList.add('hidden');AI.open=false;$('#panel').classList.remove('hidden');buildThumbs();
  const bar=$('#scanBar'),T=$('#scanT');bar.classList.remove('hidden');let done=0,heads=0,fail=0;
  for(let c=0;c<list.length;c+=3){
@@ -1796,7 +1936,7 @@ async function runScan(list){
   for(let tries=0;tries<2&&!res;tries++){try{res=await aiJSON(prompt,shots)}catch(e){if(e&&e.code==='http'&&e.status===429&&!tries){T.textContent='Free limit hit, waiting 30 seconds…';await new Promise(r=>setTimeout(r,30000))}else{fail++;if(e&&(e.code==='not_granted'||e.code==='sampling_disabled'||(e.code==='http'&&(e.status===400||e.status===403)))){toast(aiErr(e),4000);scanStop=true}break}}}
   for(const pg of (res&&Array.isArray(res.pages)?res.pages:[])){
    const k=(+pg.page||0)-1;if(!chunk.includes(k))continue;const p=d.pages[k];
-   if(typeof pg.text==='string')p.ocr=pg.text.slice(0,4000);
+   if(typeof pg.text==='string'){p.ocr=pg.text.slice(0,4000);p.ocrBy='ai'}
    const hs=(Array.isArray(pg.headings)?pg.headings:[]).filter(h=>h&&(h.num||h.title)).slice(0,6).map(h=>({n:String(h.num||'').slice(0,16),t:String(h.title||'').slice(0,80),auto:'ai'}));
    p.heads=(p.heads||[]).filter(h=>h.auto!=='ai').concat(hs);heads+=hs.length;if(!p.heads.length)delete p.heads;
   }
@@ -1806,7 +1946,7 @@ async function runScan(list){
  bar.classList.add('hidden');S.txt={};
  toast(scanStop&&done<list.length?`Stopped after ${done} pages`:fail?`Done, but ${fail} batch${fail>1?'es':''} failed. Try again later for those.`:`Read ${done} page${done>1?'s':''}${heads?`, found ${heads} section${heads>1?'s':''}`:''}. Search works on them now.`,3800);
 }
-$('#scanStop').onclick=()=>{scanStop=true;$('#scanT').textContent='Stopping after this batch…'};
+$('#scanStop').onclick=()=>{scanStop=true;LO.stop=true;$('#scanT').textContent='Stopping…'};
 $('#pSec').onclick=sectionSheet;
 
 /* ---------- split view: a second file or page beside the one you write on ---------- */
@@ -1865,8 +2005,87 @@ $('#refZo').onclick=()=>{RF.zoom=Math.max(.5,RF.zoom/1.25);const r=refScroll.scr
 
 /* ---------- study buddy (AI) ---------- */
 const AI={open:false,ctx:null,turns:[],busy:false,ctl:null};
-const gKey=()=>ls.get('m.gkey')||'',gModel=()=>ls.get('m.gmodel')||'gemini-3.6-flash';
-const aiEngine=()=>aiSample?'claude':gKey()?'gemini':null;
+const GEM_DEF='gemini-3.5-flash-lite',GROQ_DEF='qwen/qwen3.6-27b';
+const gKey=()=>ls.get('m.gkey')||'',qKey=()=>ls.get('m.qkey')||'';
+const gModel=()=>ls.get('m.gmodel2')||GEM_DEF,qModel=()=>ls.get('m.qmodel')||GROQ_DEF;
+const aiEngine=()=>aiSample?'claude':(gKey()||qKey())?'free':null;
+/* free AI: Gemini first; when it is out of free requests, Groq answers instead */
+const gemmaList=()=>{try{const l=JSON.parse(ls.get('m.gemmas')||'null');if(Array.isArray(l)&&l.length)return l}catch(e){}return['gemma-4-31b-it','gemma-4-26b-a4b-it']};
+const gemmaOn=()=>ls.get('m.gemmaOff')!=='1';
+function provList(){const a=[];if(gKey()){a.push({id:'gemini',name:'Gemini',kind:'g',model:gModel()});if(gemmaOn())gemmaList().slice(0,2).forEach(m=>a.push({id:'gemma:'+m,name:'Gemma 4',kind:'g',model:m}))}if(qKey())a.push({id:'groq',name:'Groq',kind:'q',model:qModel()});return a}
+function nextPacificMidnight(){try{const p=new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',hour:'numeric',minute:'numeric',hour12:false}).formatToParts(new Date());const h=+p.find(x=>x.type==='hour').value%24,m=+p.find(x=>x.type==='minute').value;return Date.now()+((24-h)*60-m)*60e3}catch(e){return Date.now()+36e5}}
+const cooling=p=>(+ls.get('m.cool.'+p)||0)>Date.now();
+function cool(p,e){const day=/day|daily|perday|rpd/i.test((e&&e.message)||'');ls.set('m.cool.'+p,day?nextPacificMidnight():Date.now()+65e3)}
+function aiOrder(){const a=provList();return a.filter(p=>!cooling(p.id)).concat(a.filter(p=>cooling(p.id)))}
+async function httpErr(r,prov){let m='';try{const j=await r.json();m=(j.error&&(j.error.message||j.error))||''}catch(e){}return{code:'http',status:r.status,message:String(m),prov}}
+async function readSSE(r,pick,onText){
+ const rd=r.body.getReader(),dec=new TextDecoder();let buf='',out='';
+ for(;;){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});let k;
+  while((k=buf.indexOf('\n'))>=0){const line=buf.slice(0,k).trim();buf=buf.slice(k+1);if(!line.startsWith('data:'))continue;const d=line.slice(5).trim();if(d==='[DONE]')continue;
+   try{const t=pick(JSON.parse(d));if(t){out+=t;onText&&onText(out)}}catch(e){}}}
+ return out;
+}
+async function shrinkBlob(b,max){try{const bm=await createImageBitmap(b);const k=Math.min(1,max/Math.max(bm.width,bm.height));if(k>=1)return b;const c=document.createElement('canvas');c.width=Math.round(bm.width*k);c.height=Math.round(bm.height*k);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);return await new Promise(r=>c.toBlob(r,'image/jpeg',.82))}catch(e){return b}}
+async function gemCall({model,system,hist,imgs,onText,signal,json,prov}){
+ const contents=hist.map(t=>({role:t.role==='assistant'?'model':'user',parts:[{text:t.content}]}));
+ contents[0].parts=[{text:(system?system+'\n\n':'')+hist[0].content}];
+ for(const im of imgs){contents[0].parts.push({text:im.label});contents[0].parts.push({inline_data:{mime_type:'image/jpeg',data:await blobB64(im.blob)}})}
+ const body={contents};if(json&&!/gemma/i.test(model))body.generationConfig={responseMimeType:'application/json'};
+ const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${json?'generateContent':'streamGenerateContent?alt=sse'}`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':gKey()},body:JSON.stringify(body),signal});
+ if(!r.ok)throw await httpErr(r,prov);
+ const g=j=>((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).filter(p=>!p.thought).map(p=>p.text||'').join('');
+ return json?g(await r.json()):await readSSE(r,g,onText);
+}
+async function groqCall({system,hist,imgs,onText,signal,json,prov}){
+ const msgs=hist.map((t,k)=>{
+  const text=(k===0&&system?system+'\n\n':'')+t.content;
+  if(k===0&&imgs.length){const parts=[{type:'text',text}];for(const im of imgs){parts.push({type:'text',text:im.label});parts.push({type:'image_url',image_url:{url:'data:image/jpeg;base64,'+im.b64}})}return{role:'user',content:parts}}
+  return{role:t.role,content:text};
+ });
+ const body={model:qModel(),messages:msgs,stream:!json,temperature:.4};if(json)body.response_format={type:'json_object'};
+ const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+qKey()},body:JSON.stringify(body),signal});
+ if(!r.ok)throw await httpErr(r,prov);
+ if(json){const j=await r.json();return(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||''}
+ return await readSSE(r,j=>(j.choices&&j.choices[0]&&j.choices[0].delta&&j.choices[0].delta.content)||'',onText);
+}
+async function runAI(o){
+ const list=aiOrder();if(!list.length)throw{code:'nokey'};let last=null;
+ for(const p of list){
+  let streamed=false;const on=o.onText?(t=>{streamed=true;o.onText(t)}):null;
+  try{
+   let out;
+   if(p.kind==='g')out=await gemCall(Object.assign({},o,{model:p.model,prov:p,onText:on}));
+   else{const imgs=[];for(const im of o.imgs.slice(0,5))imgs.push({label:im.label,b64:await blobB64(await shrinkBlob(im.blob,1100))});out=await groqCall(Object.assign({},o,{imgs,prov:p,onText:on}))}
+   if(!out||!out.trim())throw{code:'empty',prov:p};
+   AI.lastVia=p.name;if(p.id!==list[0].id&&p.name!==list[0].name)toast(`${list[0].name} is out of free answers for now, so ${p.name} answered`,3000);
+   return out;
+  }catch(e){
+   if(e&&(e.name==='AbortError'||e.code==='cancelled'))throw e;
+   const err=(e&&typeof e==='object')?e:{code:'x'};err.prov=err.prov||p;last=err;
+   if(err.code==='http'&&err.status===429)cool(p.id,err);
+   if(streamed)throw err;
+  }
+ }
+ throw last;
+}
+/* find the right free models for each key automatically */
+const ver=n=>{const m=String(n).match(/(\d+(?:\.\d+)?)/);return m?+m[1]:0};
+async function findGemModels(key){
+ const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200',{headers:{'x-goog-api-key':key}});if(!r.ok)throw await httpErr(r,'gemini');
+ const j=await r.json(),names=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>m.name.replace(/^models\//,''));
+ const gm=names.filter(n=>/^gemma-4/.test(n)).sort((a,b)=>(/31b/.test(b)?1:0)-(/31b/.test(a)?1:0));if(gm.length)ls.set('m.gemmas',JSON.stringify(gm));
+ return names.filter(n=>/^gemini/.test(n)&&/flash/.test(n)&&!/(image|tts|audio|live|embed|native|computer)/.test(n));
+}
+function pickGem(l){const by=a=>a.slice().sort((x,y)=>ver(y)-ver(x));return by(l.filter(n=>/lite/.test(n)&&!/preview|exp/.test(n)))[0]||by(l.filter(n=>!/preview|exp/.test(n)))[0]||l[0]}
+async function findGroqModels(key){
+ const r=await fetch('https://api.groq.com/openai/v1/models',{headers:{Authorization:'Bearer '+key}});if(!r.ok)throw await httpErr(r,'groq');
+ const j=await r.json();return(j.data||[]).map(m=>m.id).filter(i=>/(qwen3\.\d+-\d+b|llama-4|vision|scout|maverick|-vl)/i.test(i));
+}
+function pickGroq(l){return l.find(i=>/qwen3\.6/i.test(i))||l.find(i=>/qwen3\.\d/i.test(i))||l.find(i=>/scout/i.test(i))||l.find(i=>/maverick/i.test(i))||l[0]}
+async function autoModels(force){
+ if(gKey()&&(force||!ls.get('m.gmodels'))){try{const l=await findGemModels(gKey());ls.set('m.gmodels',JSON.stringify(l));if(l.length&&!l.includes(gModel())){const p=pickGem(l);if(p)ls.set('m.gmodel2',p)}}catch(e){}}
+ if(qKey()&&(force||!ls.get('m.qmodels'))){try{const l=await findGroqModels(qKey());ls.set('m.qmodels',JSON.stringify(l));if(l.length&&!l.includes(qModel())){const p=pickGroq(l);if(p)ls.set('m.qmodel',p)}}catch(e){}}
+}
 const QUICK=[
  ['explain','Explain this','Explain what is on this page so I really understand it. Go through the key ideas in order.'],
  ['solve','Solve step by step','Work through the question(s) shown step by step. Show every step and why it works, then give the final answer clearly. If there are several questions, do each one.'],
@@ -1951,7 +2170,9 @@ function renderAI(){
  if(!aiEngine()){
   body.innerHTML=`<div class="aisetup"><p><b style="color:var(--ink)">Your homework helper.</b> It looks at your page and explains it, solves problems step by step, checks your working and quizzes you.</p>
    <p>To switch it on, paste a free Google Gemini API key. Get one at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>: sign in, tap Create API key, copy it.</p>
-   <input id="gk" type="password" placeholder="Paste your API key" autocomplete="off" aria-label="Gemini API key"><button class="btnP" id="gkSave" style="width:100%;justify-content:center">Turn on study buddy</button>
+   <input id="gk" type="password" placeholder="Paste your Gemini key" autocomplete="off" aria-label="Gemini API key">
+   <p style="margin:4px 0 8px">Optional backup for when Gemini runs out: a free Groq key from <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>.</p>
+   <input id="qk" type="password" placeholder="Paste your Groq key (optional)" autocomplete="off" aria-label="Groq API key"><button class="btnP" id="gkSave" style="width:100%;justify-content:center">Turn on study buddy</button>
    <p style="margin-top:14px;font-size:12px">The key stays on this tablet. Pages you ask about are sent to Google to get an answer.</p></div>`;return;
  }
  const c=AI.ctx;
@@ -1964,7 +2185,7 @@ function renderAI(){
 function msgHtml(m,k){
  if(m.role==='user')return `<div class="msg u">${esc(m.content)}</div>`;
  const done=!m.pending&&!AI.busy||k<AI.turns.length-1;
- return `<div class="msg a">${m.pending&&!m.content?'<span class="think"><i></i><i></i><i></i></span>':md(m.content)}${m.err?`<div class="err">${esc(m.err)}</div>`:''}${done&&m.content?`<div class="act"><button data-add="${k}">Add to page</button><button data-copy="${k}">Copy</button></div>`:''}</div>`;
+ return `<div class="msg a">${m.pending&&!m.content?'<span class="think"><i></i><i></i><i></i></span>':md(m.content)}${m.err?`<div class="err">${esc(m.err)}</div>`:''}${done&&m.content?`<div class="act"><button data-add="${k}">Add to page</button><button data-copy="${k}">Copy</button>${m.via?`<span class="via">via ${esc(m.via)}</span>`:''}</div>`:''}</div>`;
 }
 function paintMsgs(){
  const box=$('#msgs');if(!box)return;
@@ -1980,26 +2201,26 @@ async function aiCall(turns,onText,signal){
  if(aiSample){
   const opts={onText:({text})=>onText(text),signal,cache:false};
   try{const lim=await aiSample.limits();if(lim&&lim.images&&AI.ctx)opts.images=AI.ctx.imgs.slice(0,lim.images.maxCount||MAXPG).map(m=>m.blob)}catch(e){}
-  const r=await aiSample([{role:'user',content:aiRules()},...hist],opts);return r.text;
+  const r=await aiSample([{role:'user',content:aiRules()},...hist],opts);AI.lastVia='Claude';return r.text;
  }
- const contents=hist.map((t,k)=>({role:t.role==='assistant'?'model':'user',parts:[{text:t.content}]}));
- contents[0].parts=[{text:aiRules()+'\n\n'+hist[0].content}];
- if(AI.ctx)for(const [k,m] of AI.ctx.imgs.entries()){contents[0].parts.push({text:`Image ${k+1}: ${m.sel?'selection from page '+(m.i+1):'page '+(m.i+1)}`});contents[0].parts.push({inline_data:{mime_type:'image/jpeg',data:await blobB64(m.blob)}})}
- const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(gModel())}:streamGenerateContent?alt=sse`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':gKey()},body:JSON.stringify({contents}),signal});
- if(!r.ok){let m='';try{m=(await r.json()).error.message}catch(e){}throw{code:'http',status:r.status,message:m}}
- const rd=r.body.getReader(),dec=new TextDecoder();let buf='',out='';
- for(;;){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});let k;
-  while((k=buf.indexOf('\n'))>=0){const line=buf.slice(0,k).trim();buf=buf.slice(k+1);if(!line.startsWith('data:'))continue;
-   try{const j=JSON.parse(line.slice(5));const t=((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(p=>p.text||'').join('');if(t){out+=t;onText(out)}}catch(e){}}}
- if(!out)throw{code:'empty'};return out;
+ const imgs=AI.ctx?AI.ctx.imgs.map((m,k)=>({label:`Image ${k+1}: ${m.sel?'selection from page '+(m.i+1):'page '+(m.i+1)}`,blob:m.blob})):[];
+ return runAI({system:aiRules(),hist,imgs,onText,signal});
 }
 function aiErr(e){
- const c=e&&(e.code||e.name);
+ const c=e&&(e.code||e.name),P=e&&e.prov&&typeof e.prov==='object'?e.prov:null,name=P?P.name:'The AI';
  if(c==='cancelled'||c==='AbortError')return'Stopped.';
+ if(c==='nokey')return'Add a free Gemini or Groq key in Study buddy settings first.';
  if(c==='not_granted'||c==='sampling_disabled')return'Claude access was not allowed for this page.';
  if(c==='rate_limited')return'Too many requests right now. Try again in a bit.';
- if(c==='http'){if(e.status===400||e.status===401||e.status===403)return'Your API key was rejected. Check it in study buddy settings.';if(e.status===404)return`The model "${gModel()}" isn't available. Change it in study buddy settings.`;if(e.status===429)return'You hit the free limit for now. Try again later.';return'The AI service had a problem ('+e.status+'). Try again.'}
+ if(c==='http'){
+  if(e.status===400&&/model|image|vision/i.test(e.message||''))return`${name}'s model "${P?P.model:''}" can't do this. Pick another model in Study buddy settings.`;
+  if(e.status===400||e.status===401||e.status===403)return`${name} rejected the key. Check it in Study buddy settings.`;
+  if(e.status===404)return`${name}'s model "${P?P.model:''}" isn't available. Tap Test keys in Study buddy settings to pick one.`;
+  if(e.status===429){const t=new Date(nextPacificMidnight()).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});return qKey()&&gKey()?`Gemini, Gemma and Groq are all out of free answers for now. Try again in a minute, or after ${t} for the daily limit.`:`${name} is out of free answers for now. Try again later (daily limits reset around ${t}).`+(qKey()?'':' Add a Groq key as a backup in Study buddy settings.')}
+  return`${name} had a problem (${e.status}). Try again.`;
+ }
  if(c==='refused')return'The AI declined to answer that one.';
+ if(c==='empty')return`${name} gave an empty answer. Try again.`;
  if(e instanceof TypeError)return'No internet connection.';
  return'Something went wrong. Try again.';
 }
@@ -2011,7 +2232,7 @@ async function aiSend(text){
   if(added.length){await refreshCtxText();paintCtx();toast('Also looking at page'+(added.length>1?'s ':' ')+added.join(', '),2200)}}
  AI.turns.push({role:'user',content:text});const msg={role:'assistant',content:'',pending:true};AI.turns.push(msg);
  AI.busy=true;AI.ctl=new AbortController();paintMsgs();
- try{msg.content=await aiCall(AI.turns.slice(0,-1),t=>{msg.content=t;paintLast()},AI.ctl.signal)}
+ try{msg.content=await aiCall(AI.turns.slice(0,-1),t=>{msg.content=t;paintLast()},AI.ctl.signal);msg.via=AI.lastVia}
  catch(e){msg.err=aiErr(e);if(e&&e.text&&!msg.content)msg.content=e.text}
  msg.pending=false;AI.busy=false;AI.ctl=null;paintMsgs();
 }
@@ -2027,15 +2248,34 @@ function aiToPage(text){
  S.tool='lasso';syncTb();sel={i,items:[it]};setTimeout(paintSel,50);toast('Added to page '+(i+1)+'. Drag it where you want.',2600);
 }
 async function aiSettings(){
- let k=gKey(),mo=gModel();
- const r=await sheet(`<form><h2>Study buddy</h2><p>${aiSample?'Here inside Claude it uses your Claude account. ':''}In the installed app it uses Google Gemini with your own free API key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.</p>
-  <label for="k1">Gemini API key</label><input type="text" id="k1" value="${esc(k)}" autocomplete="off" placeholder="Paste key here">
-  <label for="k2">Model</label><input type="text" id="k2" value="${esc(mo)}">
-  <div class="acts">${k?'<button type="button" data-v="rm" class="bad">Remove key</button>':''}<button type="button" data-v="x">Cancel</button><button class="go">Save</button></div></form>`,
-  m=>{m.querySelector('#k1').addEventListener('input',e=>k=e.target.value);m.querySelector('#k2').addEventListener('input',e=>mo=e.target.value)});
- if(r==='rm'){ls.set('m.gkey','');toast('Key removed')}
- else if(r==='ok'){ls.set('m.gkey',k.trim());ls.set('m.gmodel',mo.trim()||'gemini-3.6-flash');toast('Study buddy settings saved')}
- if(AI.open)renderAI();
+ let gk=gKey(),qk=qKey(),gm=gModel(),qm=qModel(),gemOn=gemmaOn();
+ let gl=[],ql=[];try{gl=JSON.parse(ls.get('m.gmodels')||'[]');ql=JSON.parse(ls.get('m.qmodels')||'[]')}catch(e){}
+ const chips=(list,cur,attr)=>[...new Set([cur,...list])].filter(Boolean).slice(0,8).map(n=>`<button type="button" class="opt" ${attr}="${esc(n)}" aria-pressed="${n===cur}" style="font-size:12px;min-height:38px">${esc(n)}</button>`).join('');
+ const r=await sheet(`<form><h2>Study buddy</h2><p>${aiSample?'Here inside Claude it uses your Claude account. ':''}In the app it uses free keys. <b style="color:var(--ink)">Gemini</b> answers first. When it runs out of free answers, <b style="color:var(--ink)">Gemma 4</b> (same key) and then <b style="color:var(--ink)">Groq</b> take over by themselves.</p>
+  <label for="k1">Gemini key · <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">get one free</a></label><input type="text" id="k1" value="${esc(gk)}" autocomplete="off" placeholder="Paste Gemini key">
+  <label>Gemini model</label><div class="opts" id="gmo">${chips(gl,gm,'data-gm')}</div>
+  <label>Extra backup on the same key</label><div class="opts"><button type="button" class="opt" id="gmT" aria-pressed="${gemmaOn()}">Gemma 4: ${gemmaOn()?'on':'off'}</button></div><p style="margin:6px 0 0;font-size:12px">Gemma 4 can read pages too and has a much bigger free daily limit. It steps in when Gemini runs out.</p>
+  <label for="k3">Groq key, the backup · <a href="https://console.groq.com/keys" target="_blank" rel="noopener">get one free</a></label><input type="text" id="k3" value="${esc(qk)}" autocomplete="off" placeholder="Paste Groq key">
+  <label>Groq model</label><div class="opts" id="qmo">${chips(ql,qm,'data-qm')}</div>
+  <p id="tres" style="margin:12px 0 0;font-size:13px;color:var(--ink)"></p>
+  <div class="acts"><button type="button" id="tst">Test keys</button><button type="button" data-v="x">Cancel</button><button class="go">Save</button></div></form>`,
+  m=>{
+   m.querySelector('#k1').addEventListener('input',e=>gk=e.target.value.trim());
+   m.querySelector('#k3').addEventListener('input',e=>qk=e.target.value.trim());
+   m.querySelector('#gmT').addEventListener('click',e=>{gemOn=!gemOn;e.target.setAttribute('aria-pressed',gemOn);e.target.textContent='Gemma 4: '+(gemOn?'on':'off')});
+   const wire=()=>{pick(m,'[data-gm]','data-gm',v=>gm=v);pick(m,'[data-qm]','data-qm',v=>qm=v)};wire();
+   m.querySelector('#tst').addEventListener('click',async()=>{
+    const out=m.querySelector('#tres');out.textContent='Testing…';const res=[];
+    if(gk){try{const l=await findGemModels(gk);gl=l;if(l.length&&!l.includes(gm))gm=pickGem(l)||gm;m.querySelector('#gmo').innerHTML=chips(l,gm,'data-gm');res.push('Gemini works ✓')}catch(e){res.push('Gemini: '+aiErr(Object.assign(e||{},{prov:{name:'Gemini',model:gm}})))}}
+    if(qk){try{const l=await findGroqModels(qk);ql=l;if(l.length&&!l.includes(qm))qm=pickGroq(l)||qm;m.querySelector('#qmo').innerHTML=chips(l,qm,'data-qm');res.push(l.length?'Groq works ✓':'Groq key works, but no image-reading model was found')}catch(e){res.push('Groq: '+aiErr(Object.assign(e||{},{prov:{name:'Groq',model:qm}})))}}
+    wire();out.textContent=res.join('   ')||'Paste a key first.';
+   });
+  });
+ if(r!=='ok')return;
+ if(gk!==gKey())ls.set('m.gmodels','');if(qk!==qKey())ls.set('m.qmodels','');
+ if(gl.length)ls.set('m.gmodels',JSON.stringify(gl));if(ql.length)ls.set('m.qmodels',JSON.stringify(ql));
+ ls.set('m.gemmaOff',gemOn?'':'1');Object.keys(localStorage).filter(k=>k.startsWith('m.cool.')).forEach(k=>ls.set(k,''));ls.set('m.gkey',gk);ls.set('m.qkey',qk);ls.set('m.gmodel2',gm||GEM_DEF);ls.set('m.qmodel',qm||GROQ_DEF);ls.set('m.cool.gemini','');ls.set('m.cool.groq','');
+ toast('Study buddy settings saved');autoModels();if(AI.open)renderAI();
 }
 $('#tAI').onclick=()=>{if(AI.open)closeAI();else openAI(false)};
 $('#aiClose').onclick=closeAI;
@@ -2043,7 +2283,7 @@ $('#aiSet').onclick=aiSettings;
 $('#aiNew').onclick=()=>{if(AI.ctl)try{AI.ctl.abort()}catch(e){}AI.turns=[];AI.busy=false;renderAI()};
 $('#ai').addEventListener('click',async e=>{
  const t=e.target;
- if(t.closest('#gkSave')){const v=$('#gk').value.trim();if(!v)return toast('Paste your key first');ls.set('m.gkey',v);toast('Study buddy is on');renderAI();return}
+ if(t.closest('#gkSave')){const v=$('#gk').value.trim(),q=$('#qk').value.trim();if(!v&&!q)return toast('Paste a key first');if(v){ls.set('m.gkey',v);ls.set('m.gmodels','')}if(q){ls.set('m.qkey',q);ls.set('m.qmodels','')}toast('Study buddy is on');renderAI();autoModels();return}
  if(t.closest('#aiRe')){$('#aiCtx').style.opacity=.5;await setAICtx(false);paintCtx();$('#aiCtx').style.opacity='';return}
  const q=t.closest('[data-q]');if(q){const it=QUICK.find(x=>x[0]===q.dataset.q);aiSend(it[2]);return}
  if(t.closest('#aiSend')){if(AI.busy){AI.ctl&&AI.ctl.abort();return}const ta=$('#aiT');const v=ta.value;ta.value='';ta.style.height='';aiSend(v);return}
@@ -2142,7 +2382,7 @@ async function takeShared(){
   if(files.length)importFiles(files);
  }catch(e){}
 }
-store.ready.then(async()=>{checkPersist(standalone);await showLib();loadDir();takeShared()});
+store.ready.then(async()=>{checkPersist(standalone);await showLib();loadDir();takeShared();setTimeout(()=>autoModels(),1500)});
 }
 </script>
 </body>
