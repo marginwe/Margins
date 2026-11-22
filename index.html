@@ -253,10 +253,17 @@ svg.lasso{position:absolute;left:0;top:0;width:100%;height:100%;z-index:4;pointe
 .spark{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(135deg,#3b5bfd,#8b5cf6);color:#fff;flex:none}
 .spark svg{width:17px;height:17px}
 #aiBody{display:flex;flex-direction:column;flex:1;min-height:0}
-.aictx{display:flex;align-items:center;gap:10px;margin:0 14px 10px;padding:8px;border-radius:14px;background:var(--surface2);font-size:13px;color:var(--mute);flex:none}
+.aictx{display:flex;align-items:center;gap:8px;margin:0 14px 10px;padding:8px;border-radius:14px;background:var(--surface2);font-size:13px;color:var(--mute);flex:none;flex-wrap:wrap}
+.ctxs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;flex:1 1 auto;min-width:0}
+.ctxs::-webkit-scrollbar{display:none}
+.cx{position:relative;flex:none;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--ink)}
+.cx img{width:44px!important;height:44px!important}
+.cx .rm{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);font-size:12px;line-height:20px;padding:0;margin:0}
+.cx.main img{outline:2px solid var(--acc);outline-offset:1px}
+.ctxb{display:flex;gap:6px;flex:none}
 .aictx img{width:46px;height:46px;object-fit:cover;object-position:top;border-radius:8px;background:#fff;flex:none;box-shadow:0 1px 3px rgba(0,0,0,.15)}
 .aictx b{color:var(--ink);display:block;font-size:14px}
-.aictx button{margin-left:auto;flex:none;height:34px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:12px;font-weight:600}
+.ctxb button{flex:none;height:34px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:12px;font-weight:600}
 .aiq{display:flex;gap:6px;padding:0 14px 8px;overflow-x:auto;scrollbar-width:none;flex:none}
 .aiq::-webkit-scrollbar{display:none}
 .aiq button{flex:none;height:36px;padding:0 13px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:13px}
@@ -1064,6 +1071,62 @@ function splitStroke(it,pt,rad){
  cut();return pieces;
 }
 
+/* tidy handwriting: straighten lines, align words, even sizes and gaps, smooth jitter. Still your strokes. */
+function rawBox(p){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let k=0;k<p.length;k+=2){x0=Math.min(x0,p[k]);x1=Math.max(x1,p[k]);y0=Math.min(y0,p[k+1]);y1=Math.max(y1,p[k+1])}return[x0,y0,x1,y1]}
+const med=a=>{if(!a.length)return 0;const b=[...a].sort((x,y)=>x-y),m=b.length>>1;return b.length%2?b[m]:(b[m-1]+b[m])/2};
+function tidyPlan(items){
+ const ink=items.filter(it=>(it.t==='pen'||it.t==='pencil')&&it.p&&it.p.length>=2);if(!ink.length)return null;
+ const S0=ink.map(it=>{const b=rawBox(it.p);return{it,x0:b[0],y0:b[1],x1:b[2],y1:b[3],cx:(b[0]+b[2])/2,cy:(b[1]+b[3])/2,w:b[2]-b[0],h:b[3]-b[1]}});
+ const H=Math.max(.008,med(S0.map(s=>s.h).filter(h=>h>.004)));
+ const main=S0.filter(s=>Math.max(s.w,s.h)>=H*.45),marks=S0.filter(s=>Math.max(s.w,s.h)<H*.45);
+ if(!main.length)return null;
+ // group into lines, following the writing left to right so slanted lines stay together
+ // lines: sort stroke centres top to bottom and split wherever there is a clear vertical gap
+ const lines=[];let cur=null;
+ for(const s of [...main].sort((a,b)=>a.cy-b.cy)){if(cur&&s.cy-cur.last<=H*.85){cur.s.push(s);cur.last=s.cy}else{cur={s:[s],last:s.cy};lines.push(cur)}}
+ // undo over-splitting: merge neighbouring lines whose strokes overlap a lot vertically
+ for(let k=lines.length-1;k>0;k--){const A=lines[k-1],B=lines[k];const a0=med(A.s.map(s=>s.y0)),a1=med(A.s.map(s=>s.y1)),b0=med(B.s.map(s=>s.y0)),b1=med(B.s.map(s=>s.y1));const ov=Math.min(a1,b1)-Math.max(a0,b0);if(ov>.5*Math.min(a1-a0,b1-b0)){A.s.push(...B.s);lines.splice(k,1)}}
+ // stray words: a small group sitting beside (not under) a bigger line, a bit too high or low, joins that line
+ for(let pass=0;pass<2;pass++)for(let k=lines.length-1;k>=0;k--){const B=lines[k];if(B.s.length>3)continue;
+  const bx0=Math.min(...B.s.map(s=>s.x0)),bx1=Math.max(...B.s.map(s=>s.x1)),by=med(B.s.map(s=>s.cy));let best=null,bd=1e9;
+  for(const A of lines){if(A===B||A.s.length<=B.s.length)continue;const ax0=Math.min(...A.s.map(s=>s.x0)),ax1=Math.max(...A.s.map(s=>s.x1));
+   const ovx=Math.min(ax1,bx1)-Math.max(ax0,bx0);if(ovx>(bx1-bx0)*.3)continue;const d=Math.abs(med(A.s.map(s=>s.cy))-by);if(d<bd){bd=d;best=A}}
+  if(best&&bd<H*2.2){best.s.push(...B.s);lines.splice(k,1)}}
+ for(const m of marks){let best=null,bd=1e9;for(const L of lines){const d=Math.abs(m.cy-med(L.s.map(s=>s.cy)));if(d<bd){bd=d;best=L}}if(best&&bd<H*1.6)(best.m=best.m||[]).push(m)}
+ const plan=new Map();
+ for(const L of lines){
+  const ss=L.s,px=ss.reduce((a,s)=>a+s.cx,0)/ss.length,py=med(ss.map(s=>s.cy));
+  // baseline slope from stroke centres
+  let ang=0;if(ss.length>=3){let sx=0,sy=0,sxx=0,sxy=0;for(const s of ss){sx+=s.cx;sy+=s.cy;sxx+=s.cx*s.cx;sxy+=s.cx*s.cy}const n=ss.length,v=n*sxx-sx*sx;if(v>1e-9)ang=Math.atan((n*sxy-sx*sy)/v)}
+  ang=clamp(ang,-.3,.3);const ca=Math.cos(-ang),sa=Math.sin(-ang);
+  const rot=(x,y)=>[px+(x-px)*ca-(y-py)*sa,py+(x-px)*sa+(y-py)*ca];
+  const all=[...ss,...(L.m||[])].map(s=>{const p=[];for(let k=0;k<s.it.p.length;k+=2){const q=rot(s.it.p[k],s.it.p[k+1]);p.push(q[0],q[1])}const b=rawBox(p);return{it:s.it,p,mark:!ss.includes(s),x0:b[0],x1:b[2],y0:b[1],y1:b[3],cx:(b[0]+b[2])/2,cy:(b[1]+b[3])/2}});
+  // words = runs of strokes with small gaps
+  const words=[];for(const s of all.filter(s=>!s.mark).sort((a,b)=>a.x0-b.x0)){const w=words[words.length-1];if(w&&s.x0-w.x1<H*.5){w.s.push(s);w.x1=Math.max(w.x1,s.x1)}else words.push({s:[s],x0:s.x0,x1:s.x1})}
+  for(const m of all.filter(s=>s.mark)){let best=words[0],bd=1e9;for(const w of words){const d=m.cx<w.x0?w.x0-m.cx:m.cx>w.x1?m.cx-w.x1:0;if(d<bd){bd=d;best=w}}best.s.push(m)}
+  for(const w of words){const core=w.s.filter(s=>!s.mark);w.cy=med(core.map(s=>s.cy));w.y0=Math.min(...core.map(s=>s.y0));w.y1=Math.max(...core.map(s=>s.y1));w.h=w.y1-w.y0;w.x0=Math.min(...w.s.map(s=>s.x0));w.x1=Math.max(...w.s.map(s=>s.x1));w.cx=(w.x0+w.x1)/2}
+  const hm=med(words.map(w=>w.h)),gaps=[];for(let k=1;k<words.length;k++)gaps.push(words[k].x0-words[k-1].x1);const G=gaps.length>=2?med(gaps):null;
+  let shift=0;
+  words.forEach((w,k)=>{
+   if(k&&G!==null){const g=words[k].x0-words[k-1].x1,ng=Math.max(H*.35,g+(G-g)*.5);shift+=ng-g}
+   const sc=w.h>1e-4?clamp(1+(hm/w.h-1)*.35,.85,1.18):1,dy=(py-w.cy)*.75;
+   for(const s of w.s){const p=s.p.slice();for(let j=0;j<p.length;j+=2){p[j]=w.cx+(p[j]-w.cx)*sc+shift;p[j+1]=w.cy+(p[j+1]-w.cy)*sc+dy}plan.set(s.it,p)}
+  });
+ }
+ // smooth shaky strokes a little
+ for(const [it,p] of plan){const n=p.length/2;if(n<5)continue;for(let pass=0;pass<2;pass++){const q=p.slice();for(let j=1;j<n-1;j++){q[2*j]=.25*p[2*j-2]+.5*p[2*j]+.25*p[2*j+2];q[2*j+1]=.25*p[2*j-1]+.5*p[2*j+1]+.25*p[2*j+3]}for(let j=0;j<p.length;j++)p[j]=q[j]}}
+ return{plan,lines:lines.length};
+}
+function tidy(i,items,label){
+ const r=tidyPlan(items);if(!r||!r.plan.size)return toast('Nothing handwritten to tidy here');
+ snap(i);const from=new Map([...r.plan.keys()].map(it=>[it,it.p.slice()]));const t0=performance.now(),D=320;
+ const step=t=>{const k=Math.min(1,(t-t0)/D),e=1-Math.pow(1-k,3);
+  for(const [it,to] of r.plan){const f=from.get(it);it.p=to.map((v,j)=>f[j]+(v-f[j])*e)}
+  drawInk(i);if(sel&&sel.i===i)paintSel();
+  if(k<1)requestAnimationFrame(step);else{for(const [it,to] of r.plan)it.p=to.map(r4);drawInk(i);if(sel&&sel.i===i)paintSel();save();buzz();toast(`Tidied ${r.lines} line${r.lines>1?'s':''}${label||''}. Undo if you liked it better before.`,2600)}};
+ requestAnimationFrame(step);
+}
+
 /* lasso selection */
 function inPoly(x,y,p){let ins=false;for(let i=0,j=p.length-2;i<p.length;j=i,i+=2){const xi=p[i],yi=p[i+1],xj=p[j],yj=p[j+1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))ins=!ins}return ins}
 function lassoDraw(){
@@ -1103,6 +1166,7 @@ function paintSel(){
  bar.style.left=(W<620?W/2:clamp((b[0]+b[2])/2*W,300,W-300))+'px';
  const hasInk=sel.items.some(it=>it.t!=='img');
  bar.innerHTML=(hasInk?['#111111','#3b5bfd','#e5383b','#0f9d7a','#f08c00'].map(c=>`<button class="sw" data-sc="${c}" style="background:${c}" aria-label="Recolour ${c}"></button>`).join('')+'<span class="vr"></span>':'')
+  +(sel.items.some(it=>it.t==='pen'||it.t==='pencil')?`<button data-sa="tidy">${ic('<path d="M4 20L15 9M17 4v3M19.5 6.5h-3M14 3.5l1 1M20 10l1 1"/><path d="M15 9l1.5-1.5"/>')}Tidy</button>`:'')
   +`<button data-sa="ai" class="aiB">${ic('<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/>')}Ask AI</button>`
   +`<button data-sa="dup">${ic('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>')}Duplicate</button>`
   +`<button data-sa="copy">Copy</button><button data-sa="cut">Cut</button>`
@@ -1136,6 +1200,7 @@ pagesEl.addEventListener('click',e=>{
  if(a==='del'||a==='cut'){snap(sel.i);const gone=new Set(sel.items);page.a=page.a.filter(it=>!gone.has(it));const i=sel.i;clearSel();drawInk(i);save();return}
  if(a==='dup'){snap(sel.i);const c=JSON.parse(JSON.stringify(sel.items)).map(it=>shiftItem(it,.025,.025));page.a.push(...c);sel.items=c;drawInk(sel.i);paintSel();save();return}
  if(a==='ai')openAI(true);
+ if(a==='tidy')tidy(sel.i,sel.items);
 });
 
 /* laser pointer */
@@ -1275,6 +1340,7 @@ $('#tMore').onclick=async()=>{
  const k=curIndex(),p=S.doc.pages[k],na=(S.doc.audio||[]).length;
  const v=await sheet(`<h2>${esc(S.doc.name)}</h2><div class="list">
   <button data-v="pen">${ic('<path d="M3 21l3-1 9-9-2-2-9 9-1 3z"/><path d="M15 7l2 2M17 3l4 4-2 2-4-4z"/>')}Stylus only<span class="tog ${S.penOnly?'on':''}"></span></button>
+  <button data-v="tidy">${ic('<path d="M4 20L15 9M17 4v3M19.5 6.5h-3M14 3.5l1 1M20 10l1 1"/><path d="M15 9l1.5-1.5"/>')}Tidy handwriting on this page</button>
   <button data-v="read">${ic('<path d="M12 6.5C10 5 7 4.5 3 5v13c4-.5 7 0 9 1.5 2-1.5 5-2 9-1.5V5c-4-.5-7 0-9 1.5z"/><path d="M12 6.5v13"/>')}Reading mode</button>
   <button data-v="find">${ic('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>')}Find in document</button>
   <button data-v="zoom">${ic('<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>')}Fit to width<small>${Math.round(S.zoom*100)}%</small></button>
@@ -1293,6 +1359,7 @@ $('#tMore').onclick=async()=>{
  if(v==='pen'){S.penOnly=!S.penOnly;ls.set('m.penOnly',S.penOnly?'1':'0');toast(S.penOnly?'Stylus only: fingers scroll':'Fingers draw too')}
  else if(v==='find')findSheet();
  else if(v==='read')enterRead();
+ else if(v==='tidy')tidy(k,S.doc.pages[k].a,' on page '+(k+1));
  else if(v==='zoom')zoomAt(1,sr.left+sr.width/2,sr.top+sr.height/2);
  else if(v==='img')$('#fImg').click();
  else if(v==='paste')paste();
@@ -1504,9 +1571,10 @@ const QUICK=[
  ['quiz','Quiz me','Quiz me on this page: write 5 short questions that test real understanding. Put the answers at the very end under the heading Answers.'],
  ['simple','Explain simply','Explain this like I am 12, using an everyday example.']];
 function aiRules(){
- const c=AI.ctx;
- return 'You are Study Buddy, a friendly tutor inside a note-taking app. The student is looking at the attached image of '+(c&&c.kind==='sel'?'a part of their page they selected':'their page')+' (it may contain printed text, handwriting, diagrams and highlights). Help them learn: explain reasoning step by step, show working, keep language clear and encouraging. If something in the image is unreadable, say so. Format: short paragraphs, "-" bullets or "1." numbered steps, **bold** for key terms. Write maths in plain text (x^2, sqrt(x), a/b, ×, ÷), never LaTeX. Stay focused and under 300 words unless asked for more.'
-  +(c&&c.text&&c.text.trim()?'\n\nText extracted from the page, which may be incomplete:\n"""\n'+c.text+'\n"""':'');
+ const c=AI.ctx;if(!c)return'';
+ const list=c.imgs.map((m,k)=>`Image ${k+1}: ${m.sel?'a part of page '+(m.i+1)+' the student selected':'page '+(m.i+1)}${m.i===c.i&&!m.sel?' (the page the student is on)':''}`).join('\n');
+ return 'You are Study Buddy, a friendly tutor inside a note-taking app. You are shown images of the student\'s pages from one document (they may contain printed text, handwriting, diagrams and highlights):\n'+list+'\nThe student is working on page '+(c.i+1)+'. When they mention another page, use that page\'s image or text. Help them learn: explain reasoning step by step, show working, keep language clear and encouraging. If something is unreadable, say so. Format: short paragraphs, "-" bullets or "1." numbered steps, **bold** for key terms. Write maths in plain text (x^2, sqrt(x), a/b, ×, ÷), never LaTeX. Stay focused and under 300 words unless asked for more.'
+  +(c.text&&c.text.trim()?'\n\nText extracted from the document (may be incomplete; handwriting is only in the images):\n'+c.text:'');
 }
 function closeAI(){AI.open=false;if(AI.ctl)try{AI.ctl.abort()}catch(e){}$('#ai').classList.add('hidden')}
 async function openAI(fromSel){
@@ -1515,15 +1583,52 @@ async function openAI(fromSel){
  try{await setAICtx(fromSel)}catch(e){}
  renderAI();
 }
+async function pageShot(i){const c=await pageCanvas(i,1300);const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));return{i,blob,url:URL.createObjectURL(blob)}}
+async function docText(order){
+ let out='';for(const k of order){const t=(await pageText(k)).trim();if(t)out+=`\n--- Page ${k+1} ---\n`+t;if(out.length>24000)break}
+ return out.slice(0,24000);
+}
+async function refreshCtxText(){
+ const c=AI.ctx;if(!c)return;const n=S.doc.pages.length,inc=[...new Set(c.imgs.map(m=>m.i))];
+ const rest=[...Array(n).keys()].filter(k=>!inc.includes(k)).sort((a,b)=>Math.abs(a-c.i)-Math.abs(b-c.i));
+ c.text=await docText([...inc,...rest]);
+}
 async function setAICtx(fromSel){
- const i=fromSel&&sel?sel.i:curIndex();let c=await pageCanvas(i,1400),kind='page';
- if(fromSel&&sel){const b=selBounds(),W=c.width,pad=.02;
+ const i=fromSel&&sel?sel.i:curIndex();
+ if(AI.ctx)AI.ctx.imgs.forEach(m=>URL.revokeObjectURL(m.url));
+ let main;
+ if(fromSel&&sel){
+  let c=await pageCanvas(i,1400);const b=selBounds(),W=c.width,pad=.02;
   const x0=clamp(b[0]-pad,0,1)*W,y0=Math.max(0,b[1]-pad)*W,x1=clamp(b[2]+pad,0,1)*W,y1=Math.min(c.height,(b[3]+pad)*W);
   const cw=Math.max(24,x1-x0),ch=Math.max(24,y1-y0),k=Math.min(3,1400/Math.max(cw,ch));
-  const cc=document.createElement('canvas');cc.width=Math.round(cw*k);cc.height=Math.round(ch*k);const x=cc.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cc.width,cc.height);x.imageSmoothingQuality='high';x.drawImage(c,x0,y0,cw,ch,0,0,cc.width,cc.height);c=cc;kind='sel'}
- const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));
- if(AI.ctx&&AI.ctx.url)URL.revokeObjectURL(AI.ctx.url);
- AI.ctx={kind,i,img:blob,url:URL.createObjectURL(blob),text:kind==='page'?(await pageText(i)).slice(0,6000):''};
+  const cc=document.createElement('canvas');cc.width=Math.round(cw*k);cc.height=Math.round(ch*k);const x=cc.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,cc.width,cc.height);x.imageSmoothingQuality='high';x.drawImage(c,x0,y0,cw,ch,0,0,cc.width,cc.height);
+  const blob=await new Promise(r=>cc.toBlob(r,'image/jpeg',.85));main={i,blob,url:URL.createObjectURL(blob),sel:true};
+ }else main=await pageShot(i);
+ AI.ctx={kind:main.sel?'sel':'page',i,imgs:[main],text:''};
+ await refreshCtxText();
+}
+const MAXPG=6;
+async function addCtxPage(i,quiet){
+ const c=AI.ctx;if(!c||i<0||i>=S.doc.pages.length)return false;
+ if(c.imgs.some(m=>m.i===i&&!m.sel))return false;
+ if(c.imgs.length>=MAXPG){if(!quiet)toast(`Up to ${MAXPG} pages at once`);return false}
+ c.imgs.push(await pageShot(i));return true;
+}
+function paintCtx(){
+ const el=$('#aiCtx'),c=AI.ctx;if(!el||!c)return;
+ el.innerHTML=`<div class="ctxs">${c.imgs.map((m,k)=>`<div class="cx${k?'':' main'}"><img src="${m.url}" alt="">${m.sel?'Selection':'p. '+(m.i+1)}${k?`<button class="rm" data-rmpg="${k}" aria-label="Remove page ${m.i+1}">×</button>`:''}</div>`).join('')}</div>
+  <div class="ctxb"><button id="aiAddPg">+ Page</button><button id="aiRe">Use this page</button></div>`;
+}
+async function pagePicker(){
+ const c=AI.ctx;if(!c)return;const n=S.doc.pages.length;let on=new Set(c.imgs.filter(m=>!m.sel).map(m=>m.i));
+ const r=await sheet(`<h2>Pages to look at</h2><p>Pick up to ${MAXPG}. Tip: you can also just type "use page 4" in your question.</p><div class="opts" style="max-height:46vh;overflow:auto">${[...Array(n).keys()].map(k=>`<button type="button" class="opt" data-pg="${k}" aria-pressed="${on.has(k)}" style="min-width:52px">${k+1}</button>`).join('')}</div><div class="acts"><button data-v="x">Cancel</button><button data-v="ok" class="go">Done</button></div>`,
+  m=>m.querySelectorAll('[data-pg]').forEach(b=>b.addEventListener('click',()=>{const k=+b.dataset.pg;if(on.has(k)){on.delete(k);b.setAttribute('aria-pressed','false')}else if(on.size+(c.kind==='sel'?1:0)>=MAXPG)toast(`Up to ${MAXPG} pages at once`);else{on.add(k);b.setAttribute('aria-pressed','true')}})));
+ if(r!=='ok')return;
+ const keepMain=c.imgs[0];
+ c.imgs=c.imgs.filter((m,k)=>k===0||on.has(m.i));if(!keepMain.sel&&!on.has(keepMain.i)&&on.size){c.imgs.shift();c.i=[...on][0]}
+ for(const k of [...on].sort((a,b)=>a-b))await addCtxPage(k,true);
+ if(!c.imgs.length)c.imgs=[await pageShot(c.i)];
+ await refreshCtxText();paintCtx();
 }
 function md(t){
  const inl=s=>s.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<i>$2</i>');
@@ -1546,11 +1651,11 @@ function renderAI(){
    <p style="margin-top:14px;font-size:12px">The key stays on this tablet. Pages you ask about are sent to Google to get an answer.</p></div>`;return;
  }
  const c=AI.ctx;
- body.innerHTML=`${c?`<div class="aictx"><img src="${c.url}" alt=""><div><b>${c.kind==='sel'?'Your selection':'Page '+(c.i+1)}</b>is what I'm looking at</div><button id="aiRe">Use this page</button></div>`:''}
+ body.innerHTML=`${c?`<div class="aictx" id="aiCtx"></div>`:''}
   <div class="aiq">${QUICK.map(([k,l])=>`<button data-q="${k}">${l}</button>`).join('')}</div>
   <div class="msgs" id="msgs"></div>
   <div class="aiin"><textarea id="aiT" rows="1" placeholder="Ask about this page…" aria-label="Message"></textarea><button id="aiSend" aria-label="Send">${sendSvg}</button></div>`;
- paintMsgs();
+ paintCtx();paintMsgs();
 }
 function msgHtml(m,k){
  if(m.role==='user')return `<div class="msg u">${esc(m.content)}</div>`;
@@ -1559,7 +1664,7 @@ function msgHtml(m,k){
 }
 function paintMsgs(){
  const box=$('#msgs');if(!box)return;
- box.innerHTML=AI.turns.length?AI.turns.map(msgHtml).join(''):`<div class="msg a"><p>Hey! I can see ${AI.ctx&&AI.ctx.kind==='sel'?'what you selected':'this page'}. Pick something above or ask me anything about it.</p><p>Tip: circle one question with the lasso and tap <b>Ask AI</b> to focus on just that.</p></div>`;
+ box.innerHTML=AI.turns.length?AI.turns.map(msgHtml).join(''):`<div class="msg a"><p>Hey! I can see ${AI.ctx&&AI.ctx.kind==='sel'?'what you selected':'this page'}. Pick something above or ask me anything about it.</p><p>Tip: tap <b>+ Page</b> or just say "use page 4" and I'll look at other pages too. To focus on one question, circle it with the lasso and tap <b>Ask AI</b>.</p></div>`;
  box.scrollTop=box.scrollHeight;
  const b=$('#aiSend');if(b){b.innerHTML=AI.busy?stopSvg:sendSvg;b.setAttribute('aria-label',AI.busy?'Stop':'Send')}
  $$('.aiq button').forEach(x=>x.disabled=AI.busy);
@@ -1570,12 +1675,12 @@ async function aiCall(turns,onText,signal){
  const hist=turns.filter(t=>t.content&&t.content.trim()).map(t=>({role:t.role,content:t.content}));
  if(aiSample){
   const opts={onText:({text})=>onText(text),signal,cache:false};
-  try{const lim=await aiSample.limits();if(lim&&lim.images&&AI.ctx)opts.images=[AI.ctx.img]}catch(e){}
+  try{const lim=await aiSample.limits();if(lim&&lim.images&&AI.ctx)opts.images=AI.ctx.imgs.slice(0,lim.images.maxCount||MAXPG).map(m=>m.blob)}catch(e){}
   const r=await aiSample([{role:'user',content:aiRules()},...hist],opts);return r.text;
  }
  const contents=hist.map((t,k)=>({role:t.role==='assistant'?'model':'user',parts:[{text:t.content}]}));
  contents[0].parts=[{text:aiRules()+'\n\n'+hist[0].content}];
- if(AI.ctx)contents[0].parts.push({inline_data:{mime_type:'image/jpeg',data:await blobB64(AI.ctx.img)}});
+ if(AI.ctx)for(const [k,m] of AI.ctx.imgs.entries()){contents[0].parts.push({text:`Image ${k+1}: ${m.sel?'selection from page '+(m.i+1):'page '+(m.i+1)}`});contents[0].parts.push({inline_data:{mime_type:'image/jpeg',data:await blobB64(m.blob)}})}
  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(gModel())}:streamGenerateContent?alt=sse`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':gKey()},body:JSON.stringify({contents}),signal});
  if(!r.ok){let m='';try{m=(await r.json()).error.message}catch(e){}throw{code:'http',status:r.status,message:m}}
  const rd=r.body.getReader(),dec=new TextDecoder();let buf='',out='';
@@ -1597,6 +1702,9 @@ function aiErr(e){
 async function aiSend(text){
  text=(text||'').trim();if(!text||AI.busy)return;
  if(!AI.ctx){try{await setAICtx(false)}catch(e){}}
+ if(AI.ctx&&S.doc){const want=[...text.matchAll(/\b(?:pages?|pg|p\.)\s*(\d{1,4})(?:\s*(?:-|to|and|&|,)\s*(\d{1,4}))?/gi)].flatMap(m=>{const a=+m[1],b=m[2]?+m[2]:a;const r=[];for(let k=Math.min(a,b);k<=Math.max(a,b)&&r.length<MAXPG;k++)r.push(k-1);return r});
+  let added=[];for(const k of want){if(await addCtxPage(k,true))added.push(k+1)}
+  if(added.length){await refreshCtxText();paintCtx();toast('Also looking at page'+(added.length>1?'s ':' ')+added.join(', '),2200)}}
  AI.turns.push({role:'user',content:text});const msg={role:'assistant',content:'',pending:true};AI.turns.push(msg);
  AI.busy=true;AI.ctl=new AbortController();paintMsgs();
  try{msg.content=await aiCall(AI.turns.slice(0,-1),t=>{msg.content=t;paintLast()},AI.ctl.signal)}
@@ -1632,10 +1740,12 @@ $('#aiNew').onclick=()=>{if(AI.ctl)try{AI.ctl.abort()}catch(e){}AI.turns=[];AI.b
 $('#ai').addEventListener('click',async e=>{
  const t=e.target;
  if(t.closest('#gkSave')){const v=$('#gk').value.trim();if(!v)return toast('Paste your key first');ls.set('m.gkey',v);toast('Study buddy is on');renderAI();return}
- if(t.closest('#aiRe')){$('#aiBody .aictx b').textContent='Updating…';await setAICtx(false);renderAI();return}
+ if(t.closest('#aiRe')){$('#aiCtx').style.opacity=.5;await setAICtx(false);paintCtx();$('#aiCtx').style.opacity='';return}
  const q=t.closest('[data-q]');if(q){const it=QUICK.find(x=>x[0]===q.dataset.q);aiSend(it[2]);return}
  if(t.closest('#aiSend')){if(AI.busy){AI.ctl&&AI.ctl.abort();return}const ta=$('#aiT');const v=ta.value;ta.value='';ta.style.height='';aiSend(v);return}
  const ad=t.closest('[data-add]');if(ad){aiToPage(AI.turns[+ad.dataset.add].content);return}
+ if(t.closest('#aiAddPg')){pagePicker();return}
+ const rm=t.closest('[data-rmpg]');if(rm){const k=+rm.dataset.rmpg;const m=AI.ctx.imgs.splice(k,1)[0];if(m)URL.revokeObjectURL(m.url);await refreshCtxText();paintCtx();return}
  const cp=t.closest('[data-copy]');if(cp){try{await navigator.clipboard.writeText(AI.turns[+cp.dataset.copy].content);toast('Copied',900)}catch(err){toast('Copy not available here')}}
 });
 $('#ai').addEventListener('keydown',e=>{if(e.target.id==='aiT'&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();$('#aiSend').click()}});
