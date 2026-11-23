@@ -1427,7 +1427,9 @@ function updatePinch(){
 function endPinch(){
  const p=pinch;pinch=null;pagesEl.style.transform='';pagesEl.style.transformOrigin='';
  if(!p.moved&&performance.now()-p.t0<320){if(S.hist.length){undo(S.hist,S.redo);toast('Undo',700)}return}
- const z=clamp(p.z0*p.f,.5,4);if(Math.abs(z-S.zoom)>.002)zoomAt(z,p.cx,p.cy);scroller.scrollBy(-p.tx,-p.ty);
+ if(!isFinite(p.f)||!isFinite(p.tx)||!isFinite(p.ty))return;
+ const z=clamp(p.z0*p.f,.5,4);if(Math.abs(z-S.zoom)>.002)zoomAt(z,p.cx,p.cy);
+ scroller.scrollBy(-clamp(p.tx,-innerWidth/2,innerWidth/2),-clamp(p.ty,-innerHeight/2,innerHeight/2));
 }
 function zoomAt(z,cx,cy){
  const sr=scroller.getBoundingClientRect();const px=scroller.scrollLeft+cx-sr.left,py=scroller.scrollTop+cy-sr.top;
@@ -1441,7 +1443,8 @@ pagesEl.addEventListener('pointerdown',e=>{lastInput=performance.now();
  const open=$('.page textarea');if(open){if(e.target!==open){e.preventDefault();open.blur()}return}
  stopInertia();
  if(e.pointerType==='touch'){
-  touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(e.isPrimary&&touches.size){touches.clear();if(pinch){pinch=null;pagesEl.style.transform='';pagesEl.style.transformOrigin=''}if(pan&&pan.id!==e.pointerId)pan=null}
+  touches.set(e.pointerId,{x:e.clientX,y:e.clientY,t:performance.now()});
   if(touches.size===2){abortTouchStroke();pan=null;startPinch();return}
   if(touches.size>2)return;
  }
@@ -1453,6 +1456,7 @@ pagesEl.addEventListener('pointerdown',e=>{lastInput=performance.now();
    $$('.selbar').forEach(x=>x.remove());return}
   if(S.tool!=='lasso'&&!(e.pointerType==='touch'&&S.penOnly))clearSel();
  }
+ if(e.pointerType==='pen'&&pinch){pinch=null;touches.clear();pagesEl.style.transform='';pagesEl.style.transformOrigin=''}
  if(e.pointerType==='pen'&&!S.penOnly){S.penOnly=true;ls.set('m.penOnly','1');toast('Stylus detected. Fingers scroll and zoom, the pen writes.',3200)}
  const panMode=S.tool==='hand'||(e.pointerType==='touch'&&S.penOnly);
  try{pagesEl.setPointerCapture(e.pointerId)}catch(_){}
@@ -1709,6 +1713,9 @@ function detectShape(p){
 }
 function ring(e){const r=$('#ring'),d=sizeOf('eraser')/800*S.W*2;r.style.display='block';r.style.width=r.style.height=d+'px';r.style.left=e.clientX+'px';r.style.top=e.clientY+'px'}
 pagesEl.addEventListener('pointerup',endPtr);pagesEl.addEventListener('pointercancel',endPtr);
+pagesEl.addEventListener('lostpointercapture',e=>{if(e.pointerType==='touch'&&touches.has(e.pointerId))endPtr(e)});
+function dropTouches(){touches.clear();if(pinch){pinch=null;pagesEl.style.transform='';pagesEl.style.transformOrigin=''}pan=null;stopInertia()}
+addEventListener('blur',dropTouches);document.addEventListener('visibilitychange',()=>{if(document.hidden)dropTouches()});
 scroller.addEventListener('wheel',e=>{if(!e.ctrlKey)return;e.preventDefault();zoomAt(clamp(S.zoom*(1-e.deltaY*.0025),.5,4),e.clientX,e.clientY)},{passive:false});
 function erase(pt){
  const page=S.doc.pages[cur.i],rad=sizeOf('eraser')/800,mode=S.eraseMode;let changed=false;const out=[];
@@ -2186,7 +2193,13 @@ $('#tBack').onclick=async()=>{
  S.doc=null;S.pdf=null;io.disconnect();tio.disconnect();pagesEl.innerHTML='';els=[];vis.clear();
  showLib();if(permP)permP.then(ok=>{if(ok)syncAll()});
 };
-let mainW0=0;new ResizeObserver(()=>{if(!S.doc)return;const w=scroller.clientWidth;if(Math.abs(w-mainW0)<2)return;const first=!mainW0;mainW0=w;const k=curIndex(),off=els[k]?scroller.scrollTop-els[k].offsetTop:0;layout();if(!first&&els[k])scroller.scrollTop=els[k].offsetTop+off*(S.W/(els[k].offsetWidth||S.W))}).observe(scroller);
+let mainW0=0,mainK=null;
+scroller.addEventListener('scroll',()=>{if(scroller.clientWidth>=120&&!pinch)mainK=null},{passive:true});
+new ResizeObserver(()=>{if(!S.doc)return;const w=scroller.clientWidth;
+ if(w<120){if(mainK==null&&els.length){const k=curIndex();mainK={k,f:els[k]?(scroller.scrollTop-els[k].offsetTop)/Math.max(1,els[k].offsetHeight):0}}return} // window squeezed to nothing for a moment: keep our spot, don't relayout
+ if(Math.abs(w-mainW0)<2&&mainK==null)return;const first=!mainW0;mainW0=w;
+ const spot=mainK||(()=>{const k=curIndex();return{k,f:els[k]?(scroller.scrollTop-els[k].offsetTop)/Math.max(1,els[k].offsetHeight):0}})();mainK=null;
+ layout();if(!first&&els[spot.k])scroller.scrollTop=els[spot.k].offsetTop+spot.f*els[spot.k].offsetHeight}).observe(scroller);
 document.addEventListener('keydown',e=>{
  if(!S.doc||/TEXTAREA|INPUT/.test(e.target.tagName))return;
  const mod=e.ctrlKey||e.metaKey,k=e.key.toLowerCase();
