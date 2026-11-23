@@ -39,7 +39,9 @@
           "name": "pdf",
           "accept": [
             "application/pdf",
-            ".pdf"
+            ".pdf",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".pptx"
           ]
         }
       ]
@@ -51,6 +53,9 @@
       "accept": {
         "application/pdf": [
           ".pdf"
+        ],
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation": [
+          ".pptx"
         ]
       }
     }
