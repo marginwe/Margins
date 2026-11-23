@@ -640,9 +640,9 @@ async function showLib(){
  $('#ftiles').innerHTML=FL.map(f=>{const n=all.filter(d=>d.folder===f.name).length;return `<button class="ftile" data-fd="${esc(f.name)}">${foldSvg(f.color)}<b>${esc(f.name)}</b><span>${n} ${n===1?'file':'files'}</span></button>`}).join('')
   +`<button class="ftile new" aria-label="New folder"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New folder</button>`;
  $('#slabel h2').textContent=L.f==='star'?'Starred':L.f==='pdf'?'PDFs':L.f==='nb'?'Notebooks':FL.length?'All files':'Your files';
- let docs=all.filter(d=>(!L.folder||d.folder===L.folder)&&(L.f==='all'||(L.f==='pdf'&&d.hasPdf)||(L.f==='nb'&&!d.hasPdf)||(L.f==='star'&&d.star))&&(!L.q||d.name.toLowerCase().includes(L.q)));
+ let docs=all.filter(d=>(!L.folder||d.folder===L.folder)&&(L.f==='all'||(L.f==='pdf'&&(d.hasPdf||d.pptx))||(L.f==='nb'&&!d.hasPdf&&!d.pptx)||(L.f==='star'&&d.star))&&(!L.q||d.name.toLowerCase().includes(L.q)));
  docs.sort(L.sort==='name'?(a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}):(a,b)=>b.updated-a.updated);
- const nP=all.filter(d=>d.hasPdf).length;
+ const nP=all.filter(d=>d.hasPdf||d.pptx).length;
  if(inF){const n=all.filter(d=>d.folder===inF.name).length;$('#sub').textContent=n?`${n} ${n===1?'file':'files'} · tap + to add straight into this folder`:'Empty folder. Tap + to add a PDF or notebook here.'}
  else $('#sub').textContent=all.length?`${nP} ${nP===1?'PDF':'PDFs'} · ${all.length-nP} ${all.length-nP===1?'notebook':'notebooks'} · all on this device`:'Write on PDFs. Fill notebooks. No limits.';
  $$('#seg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.f===L.f));
@@ -652,11 +652,11 @@ async function showLib(){
  $('#remind').classList.toggle('hidden',!need);
  if(need)$('#remind').innerHTML=`<div><svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span><b>Time for a backup.</b> ${last?'Last one was '+ago(last)+'.':'You haven\'t made one yet.'} Or switch on auto-save and never think about it again.</span><button id="rA" style="background:var(--acc);color:#fff">Set up auto-save</button><button id="rB">Back up now</button></div>`;
  $('#grid').innerHTML=docs.length?docs.map((d,k)=>`<article class="card" style="animation-delay:${Math.min(k,12)*25}ms">
-   <button class="open" data-id="${d.id}" aria-label="Open ${esc(d.name)}"><div class="thumb">${d.hasPdf
+   <button class="open" data-id="${d.id}" aria-label="Open ${esc(d.name)}"><div class="thumb">${(d.hasPdf||d.pptx)
      ?(d.thumb?`<img src="${d.thumb}" alt="">`:'')+'<span class="kind">PDF</span>'
      :`<div class="cover" style="--c:${d.cover||COVERS[0]}"><b>${esc(d.name)}</b><small>${d.pages.length} ${d.pages.length===1?'page':'pages'}</small></div>`}
      ${d.star?`<span class="star">${starSvg}</span>`:''}</div></button>
-   <div class="meta"><div><b>${esc(d.name)}</b><span>${ago(d.updated)}${d.hasPdf?' · '+d.pages.length+(d.pages.length===1?' page':' pages'):''}</span></div>
+   <div class="meta"><div><b>${esc(d.name)}</b><span>${ago(d.updated)}${(d.hasPdf||d.pptx)?' · '+d.pages.length+(d.pages.length===1?' page':' pages'):''}</span></div>
    <button class="ib more" data-id="${d.id}" aria-label="Options for ${esc(d.name)}"><svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg></button></div>
   </article>`).join('')
   :(inF&&!L.q?`<div class="empty"><strong>Nothing in ${esc(inF.name)} yet</strong><p>Tap + to open a PDF or start a notebook right here, or move files in from their ⋯ menu.</p></div>`
@@ -680,14 +680,14 @@ $('#grid').addEventListener('click',async e=>{
  const m=e.target.closest('.more');if(m)docMenu(m.dataset.id);
 });
 function docRefs(d){const s=new Set();for(const p of d.pages)for(const it of p.a)if(it.t==='img')s.add(it.ref);for(const a of d.audio||[])s.add(a.id);return s}
-async function deleteDoc(d){if(d.filePath&&SY.dir&&await ensurePerm(false))await removePath(d.filePath);const keep=new Set();for(const o of await store.all())if(o.id!==d.id)docRefs(o).forEach(r=>keep.add(r));for(const r of docRefs(d))if(!keep.has(r))await store.delBlob(r);await store.del(d.id)}
+async function deleteDoc(d){if(d.filePath&&SY.dir&&await ensurePerm(false))await removePath(d.filePath);const keep=new Set();for(const o of await store.all())if(o.id!==d.id)docRefs(o).forEach(r=>keep.add(r));for(const r of docRefs(d))if(!keep.has(r))await store.delBlob(r);if(d.pptx)for(let k=0;k<d.pages.length;k++)await store.delBlob('slide:'+d.id+':'+k);await store.del(d.id)}
 async function docMenu(id){
  const d=await store.get(id);if(!d)return;
- const v=await sheet(`<h2>${esc(d.name)}</h2><p>${d.hasPdf?'PDF':'Notebook'} · ${d.pages.length} pages · edited ${ago(d.updated)}</p>
+ const v=await sheet(`<h2>${esc(d.name)}</h2><p>${d.pptx?'PowerPoint':d.hasPdf?'PDF':'Notebook'} · ${d.pages.length} pages · edited ${ago(d.updated)}</p>
   <div class="list">
    <button data-v="star"><svg class="i" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>${d.star?'Remove star':'Star'}</button>
    <button data-v="ren"><svg class="i" viewBox="0 0 24 24"><path d="M4 20l4-1 11-11a2.1 2.1 0 0 0-3-3L5 16l-1 4z"/></svg>Rename</button>
-   ${d.hasPdf?'':'<button data-v="cov"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v18"/></svg>Change cover</button>'}
+   ${(d.hasPdf||d.pptx)?'':'<button data-v="cov"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v18"/></svg>Change cover</button>'}
    <button data-v="fold">${folderSvg}Move to folder<small>${d.folder?esc(d.folder):'none'}</small></button>
    <button data-v="dup"><svg class="i" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Duplicate</button>
    <button data-v="exp"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 11v7m0 0-3-3m3 3 3-3"/></svg>Save as PDF</button>
@@ -699,7 +699,7 @@ async function docMenu(id){
   if(r==='ok'&&nm.trim()){d.name=nm.trim();d.dirty=true;await store.put(d);showLib();syncAll()}}
  else if(v==='cov'){let c=d.cover||COVERS[0];const r=await sheet(`<h2>Cover</h2><div class="covers">${COVERS.map(x=>`<button style="--c:${x}" data-c="${x}" aria-pressed="${x===c}" aria-label="Cover ${x}"></button>`).join('')}</div><div class="acts"><button data-v="x">Cancel</button><button data-v="ok" class="go">Done</button></div>`,m=>pick(m,'[data-c]','data-c',v=>c=v));
   if(r==='ok'){d.cover=c;await store.put(d);showLib()}}
- else if(v==='dup'){const n=JSON.parse(JSON.stringify(d));n.id=uid();n.name=d.name+' copy';n.created=n.updated=Date.now();n.star=false;delete n.filePath;n.dirty=true;if(d.hasPdf){const b=await store.getPdf(d.id);await store.putPdf(n.id,b)}await store.put(n);toast('Duplicated');showLib()}
+ else if(v==='dup'){const n=JSON.parse(JSON.stringify(d));n.id=uid();n.name=d.name+' copy';n.created=n.updated=Date.now();n.star=false;delete n.filePath;n.dirty=true;if(d.hasPdf||d.pptx){const b=await store.getPdf(d.id);await store.putPdf(n.id,b)}await store.put(n);toast('Duplicated');showLib()}
  else if(v==='exp')exportPdf(d);
  else if(v==='fold'){const all=await store.meta();const fs=allFolders(all).map(f=>f.name);let nf='';
   const r=await sheet(`<h2>Move to folder</h2><div class="list">${['',...fs].map(f=>`<button data-v="f:${esc(f)}">${f?folderSvg+esc(f):'No folder'}${(d.folder||'')===f?'<small>current</small>':''}</button>`).join('')}</div>
@@ -773,10 +773,8 @@ async function importFiles(files){
  for(const f of files){
   try{
    if(/\.pptx$/i.test(f.name)||/presentationml/.test(f.type)){
-    if(!window.DecompressionStream||!window.PDFLib)throw{code:'nopptx'};
-    toast('Turning '+f.name+' into pages…',60000);
-    const r=await pptxToPdf(f,(i,n)=>toast(`Drawing slide ${i} of ${n}…`,60000));
-    last=await importPdf(r.file,r.texts);ok++;continue}
+    if(!window.DecompressionStream)throw{code:'nopptx'};
+    toast('Opening '+f.name+'…',60000);last=await importPptx(f);ok++;continue}
    if(/\.ppt$/i.test(f.name)){toast(f.name+' is an old PowerPoint file. Save it as .pptx or PDF first.',4500);continue}
    toast('Opening '+f.name+'…',60000);last=await importPdf(f);ok++}
   catch(err){toast('Could not open '+f.name+(err&&err.name==='PasswordException'?' (password protected)':''),3500)}
@@ -803,6 +801,7 @@ async function importPdf(file,texts){
 
 /* ---------- PowerPoint (.pptx) → pages: draws every slide itself, offline ---------- */
 async function unzipFile(buf){
+ if(!(buf instanceof ArrayBuffer))buf=buf.buffer.slice(buf.byteOffset,buf.byteOffset+buf.byteLength);
  const u=new Uint8Array(buf),dv=new DataView(buf),td=new TextDecoder();
  let e=u.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;if(e<0)throw{code:'notzip'};
  const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);const files={};
@@ -822,40 +821,58 @@ const PX={
  dir:p=>p.slice(0,p.lastIndexOf('/')+1),
  join(base,t){if(t.startsWith('/'))return t.slice(1);const parts=(PX.dir(base)+t).split('/'),o=[];for(const s of parts){if(s==='..')o.pop();else if(s!=='.')o.push(s)}return o.join('/')}
 };
-async function pptxToPdf(file,onProg){
- const Z=await unzipFile(await file.arrayBuffer()),dp=new DOMParser();
- const xml=async p=>{const t=await Z.text(p);return t?dp.parseFromString(t,'application/xml').documentElement:null};
- const relCache={};
- async function rels(part){if(relCache[part])return relCache[part];const rp=PX.dir(part)+'_rels/'+part.slice(part.lastIndexOf('/')+1)+'.rels',x=await xml(rp),m={};
-  if(x)for(const r of PX.kids(x,'Relationship'))m[r.getAttribute('Id')]={t:r.getAttribute('Type')||'',p:r.getAttribute('TargetMode')==='External'?null:PX.join(part,r.getAttribute('Target'))};return relCache[part]=m}
- const relOf=async(part,type)=>{const m=await rels(part);for(const k in m)if(m[k].t.endsWith('/'+type))return m[k].p;return null};
- const pres=await xml('ppt/presentation.xml');if(!pres)throw{code:'badpptx'};
- const sz=PX.kid(pres,'sldSz'),SW=PX.num(sz,'cx',12192000),SH=PX.num(sz,'cy',6858000);
- const presRels=await rels('ppt/presentation.xml'),slides=[];
- for(const s of PX.kids(PX.kid(pres,'sldIdLst'),'sldId')){const r=presRels[s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')];if(r&&r.p)slides.push(r.p)}
- const defStyle=PX.kid(pres,'defaultTextStyle');
- const imgCache={};
- async function img(part){if(!part)return null;if(part in imgCache)return imgCache[part];let bm=null;
-  try{if(/\.(png|jpe?g|gif|bmp|webp|svg)$/i.test(part)){const b=await Z.get(part);if(b){const ty=/svg$/i.test(part)?'image/svg+xml':'';const bl=new Blob([b],ty?{type:ty}:{});
-   if(ty){const u=URL.createObjectURL(bl);bm=await new Promise(r=>{const im=new Image();im.onload=()=>r(im);im.onerror=()=>r(null);im.src=u})}else bm=await createImageBitmap(bl)}}}catch(e){bm=null}
-  return imgCache[part]=bm}
- const W=1600,K=W/SW,H=Math.round(SH*K);
- const pdfDoc=await PDFLib.PDFDocument.create(),texts=[];
- const cv=document.createElement('canvas');cv.width=W;cv.height=H;const g=cv.getContext('2d');
- let num=0;
- for(const sp of slides){
-  num++;const sx=await xml(sp);if(!sx)continue;
-  if(sx.getAttribute('show')==='0'){continue}
-  const lp=await relOf(sp,'slideLayout'),lx=lp?await xml(lp):null,mp=lp?await relOf(lp,'slideMaster'):null,mx=mp?await xml(mp):null,tp=mp?await relOf(mp,'theme'):null,tx=tp?await xml(tp):null;
-  const T=themeOf(tx,mx),R=new PptxSlide({g,K,W,H,T,Z,rels,img,num,defStyle,sx,lx,mx,sp,lp,mp,xml});
-  await R.draw();texts.push(R.text.join('\n').trim().slice(0,4000));
-  const blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',.9)),jpg=await pdfDoc.embedJpg(await blob.arrayBuffer());
-  const pg=pdfDoc.addPage([SW/12700,SH/12700]);pg.drawImage(jpg,{x:0,y:0,width:SW/12700,height:SH/12700});
-  if(onProg)onProg(num,slides.length);await new Promise(r=>setTimeout(r,0));
+/* a PowerPoint kept as-is: slides are drawn only when they're on screen, at the size needed */
+class Deck{
+ static async open(buf){const d=new Deck();await d.init(buf);return d}
+ async init(buf){
+  this.Z=await unzipFile(buf);this.dp=new DOMParser();this.xc=new Map();this.rc=new Map();this.ic=new Map();this.tc=new Map();
+  const pres=await this.xml('ppt/presentation.xml');if(!pres)throw{code:'badpptx'};
+  const sz=PX.kid(pres,'sldSz');this.SW=PX.num(sz,'cx',12192000);this.SH=PX.num(sz,'cy',6858000);this.defStyle=PX.kid(pres,'defaultTextStyle');
+  const pr=await this.rels('ppt/presentation.xml'),all=[];
+  for(const e of PX.kids(PX.kid(pres,'sldIdLst'),'sldId')){const r=pr[e.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')];if(r&&r.p)all.push(r.p)}
+  this.slides=[];let n=0;for(const p of all){n++;const x=await this.xml(p);if(x&&x.getAttribute('show')!=='0')this.slides.push({part:p,num:n})}
+  if(!this.slides.length)throw{code:'empty'};
  }
- if(!texts.length)throw{code:'empty'};
- const bytes=await pdfDoc.save();
- return{file:new File([bytes],file.name.replace(/\.pptx$/i,'')+'.pdf',{type:'application/pdf'}),texts};
+ xml(p){if(!this.xc.has(p))this.xc.set(p,this.Z.text(p).then(t=>t?this.dp.parseFromString(t,'application/xml').documentElement:null));return this.xc.get(p)}
+ rels(part){if(!this.rc.has(part))this.rc.set(part,(async()=>{const rp=PX.dir(part)+'_rels/'+part.slice(part.lastIndexOf('/')+1)+'.rels',x=await this.xml(rp),m={};
+  if(x)for(const r of PX.kids(x,'Relationship'))m[r.getAttribute('Id')]={t:r.getAttribute('Type')||'',p:r.getAttribute('TargetMode')==='External'?null:PX.join(part,r.getAttribute('Target'))};return m})());return this.rc.get(part)}
+ async relOf(part,type){const m=await this.rels(part);for(const k in m)if(m[k].t.endsWith('/'+type))return m[k].p;return null}
+ img(part){
+  if(!part||!/\.(png|jpe?g|gif|bmp|webp|svg)$/i.test(part))return Promise.resolve(null);
+  if(this.ic.has(part)){const v=this.ic.get(part);this.ic.delete(part);this.ic.set(part,v);return v}
+  const v=(async()=>{try{const b=await this.Z.get(part);if(!b)return null;
+   if(/svg$/i.test(part)){const u=URL.createObjectURL(new Blob([b],{type:'image/svg+xml'}));return await new Promise(r=>{const im=new Image();im.onload=()=>r(im);im.onerror=()=>r(null);im.src=u})}
+   let bm=await createImageBitmap(new Blob([b]));const M=2400,big=Math.max(bm.width,bm.height);
+   if(big>M){const f=M/big,sm=await createImageBitmap(bm,{resizeWidth:Math.round(bm.width*f),resizeHeight:Math.round(bm.height*f),resizeQuality:'medium'});bm.close();bm=sm}
+   return bm}catch(e){return null}})();
+  this.ic.set(part,v);
+  while(this.ic.size>36){const k=this.ic.keys().next().value,old=this.ic.get(k);this.ic.delete(k);old.then(b=>{try{b&&b.close&&b.close()}catch(e){}})}
+  return v;
+ }
+ async parts(k){const sp=this.slides[k].part,sx=await this.xml(sp),lp=await this.relOf(sp,'slideLayout'),lx=lp?await this.xml(lp):null,mp=lp?await this.relOf(lp,'slideMaster'):null,mx=mp?await this.xml(mp):null,tp=mp?await this.relOf(mp,'theme'):null,tx=tp?await this.xml(tp):null;
+  if(!this.tc.has(mp))this.tc.set(mp,themeOf(tx,mx));return{sp,sx,lp,lx,mp,mx,T:this.tc.get(mp)}}
+ async render(k,cw,ch){
+  const c=document.createElement('canvas');c.width=cw;c.height=ch;const g=c.getContext('2d');const P=await this.parts(k);
+  const R=new PptxSlide(Object.assign({g,K:cw/this.SW,W:cw,H:ch,rels:p=>this.rels(p),img:p=>this.img(p),num:this.slides[k].num,defStyle:this.defStyle,xml:p=>this.xml(p)},P));
+  await R.draw();return c;
+ }
+ async text(k){const x=await this.xml(this.slides[k].part);if(!x)return'';return[...x.getElementsByTagNameNS('*','p')].map(p=>[...p.getElementsByTagNameNS('*','t')].map(t=>t.textContent).join('')).filter(Boolean).join('\n').slice(0,4000)}
+ async jpeg(k,w){const c=await this.render(k,w,Math.round(w*this.SH/this.SW));return new Promise(r=>c.toBlob(r,'image/jpeg',.88))}
+}
+async function importPptx(file){
+ const buf=await file.arrayBuffer(),deck=await Deck.open(buf.slice(0)),r=r4(deck.SH/deck.SW);
+ const pages=deck.slides.map((_,k)=>({s:null,sl:k,r,bg:'blank',a:[],ocrTry:1}));
+ for(let k=0;k<pages.length;k++){const t=await deck.text(k);if(t){pages[k].ocr=t;pages[k].ocrBy='pptx'}}
+ let thumb=null;try{const c=await deck.render(0,300,Math.round(300*r));thumb=c.toDataURL('image/jpeg',.75)}catch(e){}
+ const doc={id:uid(),name:file.name.replace(/\.pptx$/i,''),created:Date.now(),updated:Date.now(),hasPdf:false,pptx:true,paper:'blank',star:false,pages,thumb};
+ if(L.folder)doc.folder=L.folder;await store.putPdf(doc.id,buf);await store.put(doc);return doc.id;
+}
+/* draw a page's background: PDF page, slide, or paper */
+async function pageBg(p,w,h,src){
+ src=src||{pdf:S.pdf,deck:S.deck};
+ if(p.s!=null&&src.pdf)return renderPdfPage(p.s,w,h);
+ if(p.sl!=null&&src.deck)return src.deck.render(p.sl,w,h);
+ return null;
 }
 function themeOf(tx,mx){
  const T={c:{},major:'Calibri Light',minor:'Calibri',map:{},lnW:[9525,25400,38100]};
@@ -1219,7 +1236,7 @@ function hsl2rgb(h,s,l){if(!s)return[l*255,l*255,l*255];const q=l<.5?l*(1+s):l+s
 function toB64(buf){const u=new Uint8Array(buf);let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s)}
 function fromB64(b){const s=atob(b);const u=new Uint8Array(s.length);for(let i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u.buffer}
 async function backupBlob(docs){
- const out=[],blobs={};for(const d of docs){const b=d.hasPdf?await store.getPdf(d.id):null;out.push(Object.assign({},d,{pdf:b?toB64(b):null}));for(const r of docRefs(d))if(!(r in blobs)){const v=await store.getBlob(r);if(v)blobs[r]=v}}
+ const out=[],blobs={};for(const d of docs){const b=(d.hasPdf||d.pptx)?await store.getPdf(d.id):null;out.push(Object.assign({},d,{pdf:b?toB64(b):null}));for(const r of docRefs(d))if(!(r in blobs)){const v=await store.getBlob(r);if(v)blobs[r]=v}}
  return new Blob([JSON.stringify({app:'margins',v:2,at:Date.now(),docs:out.map(d=>{const c=Object.assign({},d);delete c.filePath;delete c.synced;return c}),blobs,folders:storedFolders()})],{type:'application/json'});
 }
 async function backup(){
@@ -1261,6 +1278,7 @@ async function openDoc(id){
  $('#lib').classList.add('hidden');$('#reader').classList.remove('hidden');$('#panel').classList.add('hidden');requestAnimationFrame(()=>{applyTb();applyAi()});
  $('#tTitle').textContent=doc.name;
  if(doc.hasPdf&&pdfjs){try{const b=await store.getPdf(id);S.pdf=await pdfjs.getDocument({data:new Uint8Array(b.slice(0))}).promise}catch(e){toast('Could not read the PDF')}}
+ S.deck=null;if(doc.pptx){try{const b=await store.getPdf(id);S.deck=await Deck.open(b.slice(0))}catch(e){toast('Could not read the slides')}}
  buildPages();scroller.scrollTop=0;scroller.scrollLeft=0;syncTb();
  const lp=doc.lp||0;if(lp&&els[lp])requestAnimationFrame(()=>{scroller.scrollTop=els[lp].offsetTop-80;curPage()});
  if(doc.hasPdf&&S.pdf&&!doc.secScan){const id=doc.id;detectSections().then(n=>{if(!S.doc||S.doc.id!==id)return;doc.secScan=1;save();if(n){buildThumbs();toast(`Found ${n} section${n>1?'s':''}. Open Pages to jump between them.`,3000)}}).catch(()=>{})}
@@ -1293,8 +1311,8 @@ async function renderPage(i){
  const key=cw+'x'+ch;if(el._key===key)return;el._key=key;
  const[bg,ink]=el.querySelectorAll('canvas');
  ink.width=cw;ink.height=ch;drawInk(i);
- if(p.s!=null&&S.pdf){
-  const off=await renderPdfPage(p.s,cw,ch);
+ if((p.s!=null&&S.pdf)||(p.sl!=null&&S.deck)){
+  const off=await pageBg(p,cw,ch);
   if(el._key!==key)return;bg.width=cw;bg.height=ch;bg.getContext('2d').drawImage(off,0,0);
  }else{bg.width=cw;bg.height=ch;drawPaper(bg.getContext('2d'),cw,ch,p.bg)}
 }
@@ -1428,13 +1446,17 @@ function endPinch(){
  const p=pinch;pinch=null;pagesEl.style.transform='';pagesEl.style.transformOrigin='';
  if(!p.moved&&performance.now()-p.t0<320){if(S.hist.length){undo(S.hist,S.redo);toast('Undo',700)}return}
  if(!isFinite(p.f)||!isFinite(p.tx)||!isFinite(p.ty))return;
- const z=clamp(p.z0*p.f,.5,4);if(Math.abs(z-S.zoom)>.002)zoomAt(z,p.cx,p.cy);
- scroller.scrollBy(-clamp(p.tx,-innerWidth/2,innerWidth/2),-clamp(p.ty,-innerHeight/2,innerHeight/2));
+ const z=clamp(p.z0*p.f,.5,4),tx=clamp(p.tx,-innerWidth/2,innerWidth/2),ty=clamp(p.ty,-innerHeight/2,innerHeight/2);
+ if(Math.abs(z-S.zoom)>.002)zoomAt(z,p.cx,p.cy,p.cx+tx,p.cy+ty);else scroller.scrollBy(-tx,-ty);
 }
-function zoomAt(z,cx,cy){
- const sr=scroller.getBoundingClientRect();const px=scroller.scrollLeft+cx-sr.left,py=scroller.scrollTop+cy-sr.top;
- const k=z/S.zoom;S.zoom=z;layout();
- scroller.scrollLeft=px*k-(cx-sr.left);scroller.scrollTop=py*k-(cy-sr.top);badge(Math.round(z*100)+'%');
+function zoomAt(z,cx,cy,x2,y2){
+ // keep the exact spot under your fingers in place (page gaps and margins don't scale, so plain math drifts)
+ if(x2==null){x2=cx;y2=cy}
+ let k=-1,fx=.5,fy=0;
+ for(let i=0;i<els.length;i++){const r=els[i].getBoundingClientRect();if(cy<r.bottom+12||i===els.length-1){k=i;fx=(cx-r.left)/r.width;fy=(cy-r.top)/r.width;break}}
+ S.zoom=z;layout();
+ if(k>=0){const r=els[k].getBoundingClientRect();scroller.scrollLeft+=r.left+fx*r.width-x2;scroller.scrollTop+=r.top+fy*r.width-y2}
+ badge(Math.round(z*100)+'%');
 }
 let badgeT;function badge(t){const b=$('#zoomBadge');b.textContent=t;b.style.opacity=1;clearTimeout(badgeT);badgeT=setTimeout(()=>b.style.opacity=0,700)}
 
@@ -1987,7 +2009,7 @@ async function pageMenu(k){
   <button data-v="dup">${ic('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>')}Duplicate page</button>
   ${k>0?`<button data-v="up">${ic('<path d="M12 19V5m0 0-6 6m6-6 6 6"/>')}Move up</button>`:''}
   ${k<d.pages.length-1?`<button data-v="down">${ic('<path d="M12 5v14m0 0-6-6m6 6 6-6"/>')}Move down</button>`:''}
-  ${p.s==null?`<button data-v="paper">${ic('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h8"/>')}Change paper<small>${p.bg}</small></button>`:''}
+  ${p.s==null&&p.sl==null?`<button data-v="paper">${ic('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h8"/>')}Change paper<small>${p.bg}</small></button>`:''}
   <button data-v="img">${ic('<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 8"/>')}Save page as image</button>
   <div class="sep"></div><button data-v="del" class="bad">${ic('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>')}Delete page</button></div>`);
  if(v==='bm'){p.bm=!p.bm;save();buildThumbs();toast(p.bm?'Bookmarked page '+(k+1):'Bookmark removed',1400)}
@@ -2002,7 +2024,7 @@ async function pageMenu(k){
 }
 async function pageCanvas(k,w){
  const p=S.doc.pages[k],h=Math.round(w*p.r),c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');
- if(p.s!=null&&S.pdf)x.drawImage(await renderPdfPage(p.s,w,h),0,0);else drawPaper(x,w,h,p.bg);
+ const bgc=await pageBg(p,w,h);if(bgc)x.drawImage(bgc,0,0);else drawPaper(x,w,h,p.bg);
  await Promise.all(p.a.filter(it=>it.t==='img').map(it=>ensureImg(it.ref)));
  x.globalCompositeOperation='multiply';drawItems(x,p.a,w);x.globalCompositeOperation='source-over';return c;
 }
@@ -2138,7 +2160,7 @@ let tchain=Promise.resolve();
 function renderThumb(i,c){tchain=tchain.then(async()=>{
  const p=S.doc&&S.doc.pages[i];if(!p||!c.isConnected)return;
  const w=Math.round(110*Math.min(devicePixelRatio||1,2)),h=Math.round(w*p.r);c.width=w;c.height=h;const x=c.getContext('2d');
- if(p.s!=null&&S.pdf)x.drawImage(await renderPdfPage(p.s,w,h),0,0);else drawPaper(x,w,h,p.bg);
+ const bgc=await pageBg(p,w,h);if(bgc)x.drawImage(bgc,0,0);else drawPaper(x,w,h,p.bg);
  x.globalCompositeOperation='multiply';drawItems(x,p.a,w);x.globalCompositeOperation='source-over';
 }).catch(()=>{})}
 $('#tPanel').onclick=()=>{closeAI();const p=$('#panel');p.classList.toggle('hidden');if(!p.classList.contains('hidden')){buildThumbs();setTimeout(()=>$('#thumbs .th[aria-current=true]')?.scrollIntoView({block:'center'}),50)}};
@@ -2186,7 +2208,7 @@ $('#tBack').onclick=async()=>{
  const permP=SY.dir?ensurePerm(true):null;
  $('.page textarea')?.blur();clearSel();closeAI();if(R.mr)R.mr.stop();
  const d=S.doc;if(!d)return;
- if(d.hasPdf){try{const el=els[0];const[bg,ink]=el?el.querySelectorAll('canvas'):[];
+ if(d.hasPdf||d.pptx){try{const el=els[0];const[bg,ink]=el?el.querySelectorAll('canvas'):[];
   if(bg&&bg.width){const c=document.createElement('canvas');c.width=300;c.height=Math.round(300*d.pages[0].r);const x=c.getContext('2d');x.drawImage(bg,0,0,c.width,c.height);x.globalCompositeOperation='multiply';x.drawImage(ink,0,0,c.width,c.height);d.thumb=c.toDataURL('image/jpeg',.75)}}catch(e){}}
  await flush();
  if(S.pdf){try{S.pdf.destroy()}catch(e){}}
@@ -2228,10 +2250,15 @@ async function buildPdfBytes(d){
   const out=await PDFDocument.create();let copied=[];
   if(d.hasPdf){const b=await store.getPdf(d.id);const src=await PDFDocument.load(b,{ignoreEncryption:true});copied=await out.copyPages(src,src.getPageIndices())}
   const font=await out.embedFont(StandardFonts.Helvetica);const emb=new Map();
+  let deck=null;if(d.pptx){deck=S.doc&&S.doc.id===d.id&&S.deck?S.deck:await store.getPdf(d.id).then(b=>Deck.open(b.slice(0))).catch(()=>null)}
   const baseW=copied[0]?copied[0].getSize().width:595.28;
   for(const p of d.pages){
    let pg;
-   if(p.s!=null&&copied[p.s]){pg=copied[p.s];out.addPage(pg)}else{pg=out.addPage([baseW,baseW*p.r]);paperPdf(pg,p.bg,rgb)}
+   if(p.s!=null&&copied[p.s]){pg=copied[p.s];out.addPage(pg)}
+   else if(p.sl!=null&&d.pptx){const sw=deck?deck.SW/12700:baseW;pg=out.addPage([sw,sw*p.r]);try{const key='slide:'+d.id+':'+p.sl;let src=await store.getBlob(key);
+     if(!src&&deck){const b=await deck.jpeg(p.sl,1600);src=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(b)});await store.putBlob(key,src)}
+     if(src){const im=await out.embedJpg(fromB64(src.split(',')[1]));pg.drawImage(im,{x:0,y:0,width:pg.getWidth(),height:pg.getHeight()})}}catch(e){console.warn('slide',e)}}
+   else{pg=out.addPage([baseW,baseW*p.r]);paperPdf(pg,p.bg,rgb)}
    const{width:W,height:H}=pg.getSize();
    for(const it of p.a){
     if(it.t==='img'){try{let im=emb.get(it.ref);if(!im){const src=await store.getBlob(it.ref);if(!src)continue;const bytes=fromB64(src.split(',')[1]);im=src.startsWith('data:image/png')?await out.embedPng(bytes):await out.embedJpg(bytes);emb.set(it.ref,im)}
@@ -2347,6 +2374,7 @@ async function tessWorker(){
 function tessSleep(){clearTimeout(LO.idle);LO.idle=setTimeout(()=>{if(LO.w&&!LO.busy){LO.w.terminate().catch(()=>{});LO.w=null}},60000)}
 async function needsOCR(k,force){
  const p=S.doc.pages[k];if(p.ocr&&!force)return false;if(p.ocrTry&&!force)return false;
+ if(p.sl!=null)return false;
  if(p.s!=null&&S.pdf){await pageText(k);return (S.txt[p.s]||'').replace(/\s/g,'').length<25}
  return p.a.some(it=>it.t==='img');
 }
@@ -2482,7 +2510,7 @@ async function refRender(i){
  const dpr=Math.min(devicePixelRatio||1,2.5);let cw=Math.round(RF.W*dpr),ch=Math.round(RF.W*p.r*dpr);const f=Math.min(1,Math.sqrt(12e6/(cw*ch)));cw=Math.round(cw*f);ch=Math.round(ch*f);
  const sz=cw+'x'+ch,key=sz+':'+(el._v||0);if(el._key===key)return;el._key=key;
  let bg=el._bg&&el._bgKey===sz?el._bg:null;
- if(!bg){if(p.s!=null&&RF.pdf)bg=await pdfShot(RF.pdf,p.s,cw,ch);else{bg=document.createElement('canvas');bg.width=cw;bg.height=ch;drawPaper(bg.getContext('2d'),cw,ch,p.bg)}
+ if(!bg){if(p.s!=null&&RF.pdf)bg=await pdfShot(RF.pdf,p.s,cw,ch);else if(p.sl!=null&&RF.deck)bg=await RF.deck.render(p.sl,cw,ch);else{bg=document.createElement('canvas');bg.width=cw;bg.height=ch;drawPaper(bg.getContext('2d'),cw,ch,p.bg)}
   if(el._key!==key)return;el._bg=bg;el._bgKey=sz}
  if(p.a.some(it=>it.t==='img')){await Promise.all(p.a.filter(it=>it.t==='img').map(it=>ensureImg(it.ref)));if(el._key!==key)return}
  const c=el.querySelector('canvas');if(c.width!==cw||c.height!==ch){c.width=cw;c.height=ch}
@@ -2499,6 +2527,7 @@ async function openRef(id,page){
  const d=S.doc&&S.doc.id===id?S.doc:await store.get(id);if(!d)return;
  if(RF.pdf){try{RF.pdf.destroy()}catch(e){}}RF.pdf=null;RF.doc=d;RF.zoom=1;
  if(d.hasPdf&&pdfjs){try{const b=await store.getPdf(id);RF.pdf=await pdfjs.getDocument({data:new Uint8Array(b.slice(0))}).promise}catch(e){}}
+ RF.deck=d.pptx?(S.doc&&S.doc.id===id&&S.deck?S.deck:await store.getPdf(id).then(b=>Deck.open(b.slice(0))).catch(()=>null)):null;
  RF.on=true;$('#reader').classList.add('split');$('#ref').classList.remove('hidden');
  refBuild();requestAnimationFrame(()=>{if(page)refJump(page);refPgPaint()});
 }
